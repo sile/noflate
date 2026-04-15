@@ -102,8 +102,7 @@ impl Decoder {
                         self.extra_len_bytes_filled += take as u8;
                         i += take;
                         if self.extra_len_bytes_filled == 2 {
-                            self.extra_remaining =
-                                u32::from(u16::from_le_bytes(self.extra_len));
+                            self.extra_remaining = u32::from(u16::from_le_bytes(self.extra_len));
                             self.state = State::ExtraLen;
                         }
                     } else {
@@ -172,9 +171,7 @@ impl Decoder {
                     }
                 }
                 State::Done => {
-                    return Err(Error::InvalidData(
-                        "bytes fed after gzip stream end".into(),
-                    ));
+                    return Err(Error::InvalidData("bytes fed after gzip stream end".into()));
                 }
             }
         }
@@ -199,9 +196,7 @@ impl Decoder {
 
     fn parse_fixed_header(&mut self) -> Result<()> {
         if self.header_bytes[0] != MAGIC1 || self.header_bytes[1] != MAGIC2 {
-            return Err(Error::InvalidData(
-                "gzip magic bytes not found".into(),
-            ));
+            return Err(Error::InvalidData("gzip magic bytes not found".into()));
         }
         if self.header_bytes[2] != METHOD_DEFLATE {
             return Err(Error::Unsupported(Cow::Owned(format!(
@@ -260,9 +255,7 @@ impl Decoder {
                 ));
             }
             if expected_size != self.size {
-                return Err(Error::InvalidData(
-                    "isize mismatch in gzip trailer".into(),
-                ));
+                return Err(Error::InvalidData("isize mismatch in gzip trailer".into()));
             }
             self.state = State::Done;
             self.finished = true;
@@ -332,7 +325,8 @@ impl Encoder {
         let deflate_bytes = self.deflate.output().to_vec();
         self.output.extend_from_slice(&deflate_bytes);
         self.deflate.advance(deflate_bytes.len());
-        self.output.extend_from_slice(&self.crc.value().to_le_bytes());
+        self.output
+            .extend_from_slice(&self.crc.value().to_le_bytes());
         self.output.extend_from_slice(&self.size.to_le_bytes());
         self.finishing = true;
         Ok(())
@@ -345,7 +339,10 @@ impl Encoder {
 
     /// Mark `n` bytes of output as consumed.
     pub fn advance(&mut self, n: usize) {
-        assert!(n <= self.output.len() - self.drained, "advance past end of output");
+        assert!(
+            n <= self.output.len() - self.drained,
+            "advance past end of output"
+        );
         self.drained += n;
     }
 
@@ -465,10 +462,8 @@ mod tests {
         assert_eq!(decoded, b"noflate -> flate2 gzip");
 
         // flate2's output -> our decoder.
-        let mut their_enc = flate2::write::GzEncoder::new(
-            Vec::new(),
-            flate2::Compression::default(),
-        );
+        let mut their_enc =
+            flate2::write::GzEncoder::new(Vec::new(), flate2::Compression::default());
         their_enc.write_all(b"flate2 -> noflate gzip").unwrap();
         let theirs = their_enc.finish().unwrap();
         assert_eq!(decompress(&theirs).unwrap(), b"flate2 -> noflate gzip");

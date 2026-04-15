@@ -1,3 +1,5 @@
+#![forbid(unsafe_code)]
+
 //! A zero-dependency, sans-io DEFLATE (RFC 1951) encoder and decoder.
 //!
 //! # Design

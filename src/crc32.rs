@@ -22,7 +22,11 @@ const fn make_table() -> [[u32; 256]; SLICE] {
         let mut c = i as u32;
         let mut j = 0;
         while j < 8 {
-            c = if c & 1 != 0 { (c >> 1) ^ POLYNOMIAL } else { c >> 1 };
+            c = if c & 1 != 0 {
+                (c >> 1) ^ POLYNOMIAL
+            } else {
+                c >> 1
+            };
             j += 1;
         }
         table[0][i] = c;
@@ -128,8 +132,10 @@ mod tests {
         // Per the POSIX cksum / cksum -a crc32 standard vectors.
         assert_eq!(checksum(b""), 0);
         assert_eq!(checksum(b"a"), 0xE8B7_BE43);
-        assert_eq!(checksum(b"The quick brown fox jumps over the lazy dog"),
-                   0x414F_A339);
+        assert_eq!(
+            checksum(b"The quick brown fox jumps over the lazy dog"),
+            0x414F_A339
+        );
     }
 
     #[test]

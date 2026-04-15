@@ -144,11 +144,8 @@ impl Decoder {
                 pending_bit_count,
                 ..
             } = self;
-            let mut reader = BitReader::new_seeded(
-                input.get(),
-                *pending_bit_buffer,
-                *pending_bit_count,
-            );
+            let mut reader =
+                BitReader::new_seeded(input.get(), *pending_bit_buffer, *pending_bit_count);
             let mut finished = false;
             loop {
                 match step(&mut reader, state, output)? {
@@ -240,10 +237,7 @@ fn step(
     }
 }
 
-fn step_block_header(
-    reader: &mut BitReader<'_>,
-    state: &mut DecodeState,
-) -> Result<StepOutcome> {
+fn step_block_header(reader: &mut BitReader<'_>, state: &mut DecodeState) -> Result<StepOutcome> {
     let snap = reader.snapshot();
     if reader.available_bits() < 3 {
         *state = DecodeState::BlockHeader;
@@ -262,11 +256,8 @@ fn step_block_header(
                 None,
                 Some(END_OF_BLOCK),
             )?;
-            let distance = HuffmanDecoder::from_code_lengths(
-                &fixed_distance_code_lengths(),
-                Some(7),
-                None,
-            )?;
+            let distance =
+                HuffmanDecoder::from_code_lengths(&fixed_distance_code_lengths(), Some(7), None)?;
             *state = DecodeState::SymbolLoop {
                 is_final,
                 literal,
@@ -733,7 +724,10 @@ mod tests {
     #[test]
     fn decode_known_dynamic_block() {
         let input = [75, 76, 42, 74, 76, 78, 76, 73, 4, 82, 10, 137, 216, 217, 0];
-        assert_eq!(decompress_once(&input), b"abracadabra abracadabra abracadabra");
+        assert_eq!(
+            decompress_once(&input),
+            b"abracadabra abracadabra abracadabra"
+        );
     }
 
     #[test]

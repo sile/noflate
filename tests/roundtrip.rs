@@ -62,7 +62,10 @@ fn all_zeros() {
 
 #[test]
 fn long_repeated_pattern() {
-    let input: Vec<u8> = std::iter::repeat_n(b"banana ", 500).flatten().copied().collect();
+    let input: Vec<u8> = std::iter::repeat_n(b"banana ", 500)
+        .flatten()
+        .copied()
+        .collect();
     assert_roundtrip(&input);
 }
 

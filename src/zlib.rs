@@ -102,8 +102,7 @@ impl Decoder {
                 }
                 State::Trailer => {
                     let take = (4 - self.trailer_filled as usize).min(rest.len());
-                    self.trailer[self.trailer_filled as usize
-                        ..self.trailer_filled as usize + take]
+                    self.trailer[self.trailer_filled as usize..self.trailer_filled as usize + take]
                         .copy_from_slice(&rest[..take]);
                     self.trailer_filled += take as u8;
                     rest = &rest[take..];
@@ -119,9 +118,7 @@ impl Decoder {
                     }
                 }
                 State::Done => {
-                    return Err(Error::InvalidData(
-                        "bytes fed after zlib stream end".into(),
-                    ));
+                    return Err(Error::InvalidData("bytes fed after zlib stream end".into()));
                 }
             }
         }
@@ -162,9 +159,7 @@ impl Decoder {
                 }
                 Ok(())
             }
-            State::Done => Err(Error::InvalidData(
-                "bytes fed after zlib stream end".into(),
-            )),
+            State::Done => Err(Error::InvalidData("bytes fed after zlib stream end".into())),
             _ => unreachable!("feed_byte_in_trailer in unexpected state"),
         }
     }
@@ -265,7 +260,8 @@ impl Encoder {
         let deflate_bytes = self.deflate.output().to_vec();
         self.output.extend_from_slice(&deflate_bytes);
         self.deflate.advance(deflate_bytes.len());
-        self.output.extend_from_slice(&self.adler.value().to_be_bytes());
+        self.output
+            .extend_from_slice(&self.adler.value().to_be_bytes());
         self.finishing = true;
         Ok(())
     }
@@ -277,7 +273,10 @@ impl Encoder {
 
     /// Mark `n` bytes of output as consumed.
     pub fn advance(&mut self, n: usize) {
-        assert!(n <= self.output.len() - self.drained, "advance past end of output");
+        assert!(
+            n <= self.output.len() - self.drained,
+            "advance past end of output"
+        );
         self.drained += n;
     }
 
@@ -402,10 +401,8 @@ mod tests {
         assert_eq!(decoded, b"noflate -> flate2");
 
         // flate2's output -> our decoder.
-        let mut their_enc = flate2::write::ZlibEncoder::new(
-            Vec::new(),
-            flate2::Compression::default(),
-        );
+        let mut their_enc =
+            flate2::write::ZlibEncoder::new(Vec::new(), flate2::Compression::default());
         their_enc.write_all(b"flate2 -> noflate").unwrap();
         let theirs = their_enc.finish().unwrap();
         assert_eq!(decompress(&theirs).unwrap(), b"flate2 -> noflate");

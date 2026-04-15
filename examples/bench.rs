@@ -61,7 +61,9 @@ fn flate2_decompress(input: &[u8]) -> Vec<u8> {
 fn bench_encode(input: &[u8], repeats: usize) {
     let mut samples = Vec::new();
     for _ in 0..repeats {
-        samples.push(time_once("noflate", input.len(), || noflate_compress(input)));
+        samples.push(time_once("noflate", input.len(), || {
+            noflate_compress(input)
+        }));
     }
     for _ in 0..repeats {
         samples.push(time_once("flate2", input.len(), || flate2_compress(input)));

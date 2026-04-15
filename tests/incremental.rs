@@ -71,12 +71,7 @@ fn decoder_random_chunk_sizes() {
 
 #[test]
 fn encoder_byte_by_byte_matches_whole() {
-    let inputs: &[&[u8]] = &[
-        b"",
-        b"X",
-        b"Hello World!",
-        b"banana banana",
-    ];
+    let inputs: &[&[u8]] = &[b"", b"X", b"Hello World!", b"banana banana"];
     for input in inputs {
         let compressed = encode_byte_by_byte(input);
         let decoded = decompress(&compressed).unwrap();
