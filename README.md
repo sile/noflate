@@ -12,7 +12,7 @@ Features
 --------
 
 - No dependencies; pure, portable, safe Rust
-- Sans-io streaming API: the library owns its buffers; the caller feeds bytes in and pulls bytes out without any `std::io::Read` / `std::io::Write` coupling
+- Sans-I/O streaming API — the library owns its buffers; the caller feeds bytes in and pulls bytes out. No `std::io::Read` / `std::io::Write` coupling, no implicit I/O.
 - DEFLATE (RFC 1951): encoder and decoder, all three block kinds (stored / fixed Huffman / dynamic Huffman)
 - ZLIB (RFC 1950) wrapper with Adler-32 verification
 - GZIP (RFC 1952) wrapper with CRC-32 + ISIZE verification
