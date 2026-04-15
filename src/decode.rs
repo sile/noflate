@@ -678,13 +678,19 @@ fn copy_from_distance(output: &mut Vec<u8>, distance: usize, length: usize) -> R
     if distance >= length {
         output.extend_from_within(start..start + length);
     } else {
+        // Overlapping: the pattern at the tail is `distance` bytes wide
+        // initially and grows by whatever we emit each iteration. We
+        // exploit that by doubling: each iteration copies up to the full
+        // current tail, giving O(log(length / distance)) extend calls
+        // instead of O(length / distance).
         output.reserve(length);
-        let mut remaining = length;
-        while remaining > 0 {
-            let copy_len = remaining.min(distance);
-            let src_start = output.len() - distance;
-            output.extend_from_within(src_start..src_start + copy_len);
-            remaining -= copy_len;
+        let mut emitted = 0usize;
+        while emitted < length {
+            let tail_len = distance + emitted;
+            let take = tail_len.min(length - emitted);
+            let src_start = output.len() - tail_len;
+            output.extend_from_within(src_start..src_start + take);
+            emitted += take;
         }
     }
     Ok(())

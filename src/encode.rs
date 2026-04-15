@@ -14,7 +14,7 @@ use std::cmp;
 use crate::bit::BitWriter;
 use crate::error::Result;
 use crate::huffman::{HuffmanEncoder, length_limited_code_lengths};
-use crate::lz77::{Lz77Code, lz77_symbols};
+use crate::lz77::{Lz77Code, MatchFinder};
 use crate::symbol::{
     BITWIDTH_CODE_ORDER, END_OF_BLOCK, MAX_BITS, MAX_STORED_BLOCK, distance_to_symbol,
     fixed_distance_code_lengths, fixed_literal_code_lengths, length_to_symbol,
@@ -72,6 +72,7 @@ pub struct Encoder {
     options: EncodeOptions,
     input: Vec<u8>,
     output: Vec<u8>,
+    matcher: MatchFinder,
     drained: usize,
     finishing: bool,
 }
@@ -94,6 +95,7 @@ impl Encoder {
             options,
             input: Vec::new(),
             output: Vec::new(),
+            matcher: MatchFinder::new(),
             drained: 0,
             finishing: false,
         }
@@ -184,7 +186,7 @@ impl Encoder {
     }
 
     fn emit_fixed_block(&mut self) -> Result<()> {
-        let symbols = lz77_symbols(&self.input);
+        let symbols = self.matcher.symbols(&self.input);
         let literal_lengths = fixed_literal_code_lengths();
         let distance_lengths = fixed_distance_code_lengths();
         let literal_encoder = HuffmanEncoder::from_code_lengths(&literal_lengths)?;
@@ -199,7 +201,7 @@ impl Encoder {
     }
 
     fn emit_dynamic_block(&mut self) -> Result<()> {
-        let symbols = lz77_symbols(&self.input);
+        let symbols = self.matcher.symbols(&self.input);
         let mut literal_frequencies = [0usize; 286];
         let mut distance_frequencies = [0usize; 30];
         let mut has_distance = false;

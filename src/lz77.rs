@@ -1,10 +1,12 @@
-//! One-shot LZ77 match finder.
+//! LZ77 match finder used by the encoder.
 //!
-//! The streaming encoder buffers its input and, on `finish()` or when a
-//! block fills up, calls [`lz77_symbols`] on the accumulated bytes to
-//! produce a sequence of [`Lz77Code`] entries that are then Huffman-coded.
+//! [`MatchFinder`] owns the hash-chain tables (`head` + `prev`, 256 KiB
+//! combined) so they can be reused across multiple encode calls. For a
+//! one-shot encode pass, [`MatchFinder::symbols`] emits the full
+//! `Vec<Lz77Code>` for the input.
 //!
-//! Adapted from `nopng::deflate::lz77_symbols`.
+//! Adapted from `nopng::deflate::lz77_symbols`; the matching strategy is
+//! unchanged.
 
 use crate::symbol::{MAX_MATCH, MIN_MATCH, WINDOW_SIZE};
 
@@ -28,93 +30,127 @@ fn hash3(input: &[u8], pos: usize) -> usize {
         & HASH_MASK
 }
 
-/// Produce LZ77 tokens for the given input slice.
-pub(crate) fn lz77_symbols(input: &[u8]) -> Vec<Lz77Code> {
-    let mut symbols = Vec::new();
-    if input.len() < MIN_MATCH {
-        for &byte in input {
-            symbols.push(Lz77Code::Literal(byte));
+/// Hash-chain match finder with reusable internal tables.
+#[derive(Debug)]
+pub(crate) struct MatchFinder {
+    head: Vec<u32>,
+    prev: Vec<u32>,
+    /// Head table has been dirtied by a previous `symbols` call and
+    /// needs to be re-filled with `NIL` before the next run. False for a
+    /// freshly-constructed matcher (the Vec was allocated with NIL).
+    head_dirty: bool,
+}
+
+impl MatchFinder {
+    pub(crate) fn new() -> Self {
+        Self {
+            head: vec![NIL; HASH_SIZE],
+            prev: vec![NIL; WINDOW_SIZE],
+            head_dirty: false,
         }
-        return symbols;
     }
 
-    let mut head = vec![NIL; HASH_SIZE];
-    let mut prev = vec![NIL; WINDOW_SIZE];
-    let mut cursor = 0;
-
-    while cursor < input.len() {
-        if cursor + MIN_MATCH > input.len() {
-            symbols.push(Lz77Code::Literal(input[cursor]));
-            cursor += 1;
-            continue;
+    /// Produce LZ77 tokens for `input`. Previous contents of the hash
+    /// tables are reset lazily; `prev` does not need to be reset because
+    /// every entry is overwritten before being read (each position
+    /// writes `prev[pos & mask]` before later code walks the chain
+    /// through that same index).
+    pub(crate) fn symbols(&mut self, input: &[u8]) -> Vec<Lz77Code> {
+        if self.head_dirty {
+            self.head.iter_mut().for_each(|slot| *slot = NIL);
+        }
+        self.head_dirty = true;
+        let mut symbols = Vec::new();
+        if input.len() < MIN_MATCH {
+            for &byte in input {
+                symbols.push(Lz77Code::Literal(byte));
+            }
+            return symbols;
         }
 
-        let h = hash3(input, cursor);
-        let max_length = (input.len() - cursor).min(MAX_MATCH);
-        let search_start = cursor.saturating_sub(WINDOW_SIZE);
+        let head = &mut self.head[..];
+        let prev = &mut self.prev[..];
+        let mut cursor = 0;
 
-        let mut best_length = 0;
-        let mut best_distance = 0;
-        let mut chain_pos = head[h];
-        let mut chain_count = 0;
+        while cursor < input.len() {
+            if cursor + MIN_MATCH > input.len() {
+                symbols.push(Lz77Code::Literal(input[cursor]));
+                cursor += 1;
+                continue;
+            }
 
-        while chain_pos != NIL
-            && (chain_pos as usize) >= search_start
-            && (chain_pos as usize) < cursor
-            && chain_count < MAX_CHAIN_LEN
-        {
-            let candidate = chain_pos as usize;
-            if input[candidate] == input[cursor] {
-                let mut length = 1;
-                while length < max_length && input[candidate + length] == input[cursor + length] {
-                    length += 1;
-                }
-                if length >= MIN_MATCH && length > best_length {
-                    best_length = length;
-                    best_distance = cursor - candidate;
-                    if length == max_length {
-                        break;
+            let h = hash3(input, cursor);
+            let max_length = (input.len() - cursor).min(MAX_MATCH);
+            let search_start = cursor.saturating_sub(WINDOW_SIZE);
+
+            let mut best_length = 0;
+            let mut best_distance = 0;
+            let mut chain_pos = head[h];
+            let mut chain_count = 0;
+
+            while chain_pos != NIL
+                && (chain_pos as usize) >= search_start
+                && (chain_pos as usize) < cursor
+                && chain_count < MAX_CHAIN_LEN
+            {
+                let candidate = chain_pos as usize;
+                if input[candidate] == input[cursor] {
+                    let mut length = 1;
+                    while length < max_length
+                        && input[candidate + length] == input[cursor + length]
+                    {
+                        length += 1;
+                    }
+                    if length >= MIN_MATCH && length > best_length {
+                        best_length = length;
+                        best_distance = cursor - candidate;
+                        if length == max_length {
+                            break;
+                        }
                     }
                 }
+                chain_pos = prev[candidate & (WINDOW_SIZE - 1)];
+                chain_count += 1;
             }
-            chain_pos = prev[candidate & (WINDOW_SIZE - 1)];
-            chain_count += 1;
-        }
 
-        prev[cursor & (WINDOW_SIZE - 1)] = head[h];
-        head[h] = cursor as u32;
+            prev[cursor & (WINDOW_SIZE - 1)] = head[h];
+            head[h] = cursor as u32;
 
-        if best_length >= MIN_MATCH {
-            for i in 1..best_length {
-                if cursor + i + MIN_MATCH <= input.len() {
-                    let ih = hash3(input, cursor + i);
-                    prev[(cursor + i) & (WINDOW_SIZE - 1)] = head[ih];
-                    head[ih] = (cursor + i) as u32;
+            if best_length >= MIN_MATCH {
+                for i in 1..best_length {
+                    if cursor + i + MIN_MATCH <= input.len() {
+                        let ih = hash3(input, cursor + i);
+                        prev[(cursor + i) & (WINDOW_SIZE - 1)] = head[ih];
+                        head[ih] = (cursor + i) as u32;
+                    }
                 }
+                symbols.push(Lz77Code::Pointer {
+                    length: best_length,
+                    distance: best_distance,
+                });
+                cursor += best_length;
+            } else {
+                symbols.push(Lz77Code::Literal(input[cursor]));
+                cursor += 1;
             }
-            symbols.push(Lz77Code::Pointer {
-                length: best_length,
-                distance: best_distance,
-            });
-            cursor += best_length;
-        } else {
-            symbols.push(Lz77Code::Literal(input[cursor]));
-            cursor += 1;
         }
+        symbols
     }
-    symbols
 }
 
 #[cfg(test)]
 mod tests {
-    use super::{Lz77Code, lz77_symbols};
+    use super::{Lz77Code, MatchFinder};
+
+    fn symbols(input: &[u8]) -> Vec<Lz77Code> {
+        MatchFinder::new().symbols(input)
+    }
 
     #[test]
     fn short_input_all_literals() {
         let input = b"ab";
-        let symbols = lz77_symbols(input);
         assert_eq!(
-            symbols,
+            symbols(input),
             vec![Lz77Code::Literal(b'a'), Lz77Code::Literal(b'b')]
         );
     }
@@ -122,11 +158,10 @@ mod tests {
     #[test]
     fn repeated_run_matches() {
         let input = b"aaaaa";
-        let symbols = lz77_symbols(input);
-        assert!(matches!(symbols.first(), Some(Lz77Code::Literal(b'a'))));
+        let syms = symbols(input);
+        assert!(matches!(syms.first(), Some(Lz77Code::Literal(b'a'))));
         assert!(
-            symbols
-                .iter()
+            syms.iter()
                 .any(|c| matches!(c, Lz77Code::Pointer { distance: 1, .. }))
         );
     }
@@ -134,11 +169,19 @@ mod tests {
     #[test]
     fn distant_match() {
         let input = b"abcdefghijk_____abcdefghijk";
-        let symbols = lz77_symbols(input);
+        let syms = symbols(input);
         assert!(
-            symbols
-                .iter()
+            syms.iter()
                 .any(|c| matches!(c, Lz77Code::Pointer { length: 11, .. }))
         );
+    }
+
+    #[test]
+    fn matcher_reuses_tables_across_calls() {
+        let mut m = MatchFinder::new();
+        for _ in 0..3 {
+            let syms = m.symbols(b"banana banana");
+            assert!(syms.iter().any(|c| matches!(c, Lz77Code::Pointer { .. })));
+        }
     }
 }

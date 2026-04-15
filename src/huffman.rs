@@ -197,34 +197,18 @@ fn ordinary_huffman_optimal_max_bitwidth(frequencies: &[usize]) -> u8 {
 }
 
 fn package_merge_code_lengths(frequencies: &[usize], max_bitwidth: u8) -> Vec<u8> {
+    // Each node tracks a *list* of leaf symbols it subsumes (duplicates
+    // allowed as the package-merge algorithm grows the list on every
+    // merge). The final code width for symbol S equals the number of
+    // times S appears across the final packaged list. This sparse
+    // representation is much cheaper to clone than a dense per-symbol
+    // counts vector when only a subset of the alphabet is in use.
     let symbol_count = frequencies.len();
 
     #[derive(Debug, Clone)]
     struct Node {
-        counts: Vec<u8>,
+        symbols: Vec<u16>,
         weight: usize,
-    }
-
-    impl Node {
-        fn empty(symbol_count: usize) -> Self {
-            Self {
-                counts: vec![0; symbol_count],
-                weight: 0,
-            }
-        }
-
-        fn single(symbol: usize, weight: usize, symbol_count: usize) -> Self {
-            let mut counts = vec![0; symbol_count];
-            counts[symbol] = 1;
-            Self { counts, weight }
-        }
-
-        fn merge(&mut self, other: &Self) {
-            self.weight += other.weight;
-            for (a, &b) in self.counts.iter_mut().zip(other.counts.iter()) {
-                *a += b;
-            }
-        }
     }
 
     fn merge_nodes(left: Vec<Node>, right: Vec<Node>) -> Vec<Node> {
@@ -245,17 +229,22 @@ fn package_merge_code_lengths(frequencies: &[usize], max_bitwidth: u8) -> Vec<u8
         merged
     }
 
-    fn package(nodes: &[Node], symbol_count: usize) -> Vec<Node> {
+    fn package(nodes: &[Node]) -> Vec<Node> {
         if nodes.len() < 2 {
             return nodes.to_vec();
         }
         let new_len = nodes.len() / 2;
         let mut result = Vec::with_capacity(new_len);
         for i in 0..new_len {
-            let mut merged = Node::empty(symbol_count);
-            merged.merge(&nodes[i * 2]);
-            merged.merge(&nodes[i * 2 + 1]);
-            result.push(merged);
+            let a = &nodes[i * 2];
+            let b = &nodes[i * 2 + 1];
+            let mut symbols = Vec::with_capacity(a.symbols.len() + b.symbols.len());
+            symbols.extend_from_slice(&a.symbols);
+            symbols.extend_from_slice(&b.symbols);
+            result.push(Node {
+                symbols,
+                weight: a.weight + b.weight,
+            });
         }
         result
     }
@@ -264,19 +253,22 @@ fn package_merge_code_lengths(frequencies: &[usize], max_bitwidth: u8) -> Vec<u8
         .iter()
         .enumerate()
         .filter(|(_, frequency)| **frequency > 0)
-        .map(|(symbol, frequency)| Node::single(symbol, *frequency, symbol_count))
+        .map(|(symbol, frequency)| Node {
+            symbols: vec![symbol as u16],
+            weight: *frequency,
+        })
         .collect();
     source.sort_by_key(|node| node.weight);
 
     let weighted = (0..max_bitwidth.saturating_sub(1)).fold(source.clone(), |weighted, _| {
-        merge_nodes(package(&weighted, symbol_count), source.clone())
+        merge_nodes(package(&weighted), source.clone())
     });
 
     let mut widths = vec![0u8; symbol_count];
-    let packaged = package(&weighted, symbol_count);
+    let packaged = package(&weighted);
     for node in &packaged {
-        for (symbol, &count) in node.counts.iter().enumerate() {
-            widths[symbol] += count;
+        for &sym in &node.symbols {
+            widths[sym as usize] += 1;
         }
     }
     widths
