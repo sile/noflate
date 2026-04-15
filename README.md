@@ -17,10 +17,6 @@ Features
 - DEFLATE (RFC 1951): encoder and decoder, all three block kinds (stored / fixed Huffman / dynamic Huffman)
 - ZLIB (RFC 1950) wrapper with Adler-32 verification
 - GZIP (RFC 1952) wrapper with CRC-32 + ISIZE verification
-- Streaming [`Adler32`] and [`Crc32`] primitives (slice-by-16 CRC-32)
-
-[`Adler32`]: https://docs.rs/noflate/latest/noflate/struct.Adler32.html
-[`Crc32`]: https://docs.rs/noflate/latest/noflate/struct.Crc32.html
 
 Examples
 --------
@@ -56,13 +52,6 @@ assert_eq!(noflate::gzip::decompress(&gz).unwrap(), b"hello world");
 
 let zl = noflate::zlib::compress(b"hello world").unwrap();
 assert_eq!(noflate::zlib::decompress(&zl).unwrap(), b"hello world");
-```
-
-### Checksums
-
-```rust
-assert_eq!(noflate::crc32(b"a"), 0xE8B7_BE43);
-assert_eq!(noflate::adler32(b"a"), 0x0062_0062);
 ```
 
 Benchmarks
