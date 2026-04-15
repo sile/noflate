@@ -54,3 +54,20 @@ jobs:
       - run: rustup default stable
       - run: rustup target add thumbv6m-none-eabi
       - run: cargo check --lib --target thumbv6m-none-eabi
+
+  fuzz:
+    name: Fuzz
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout sources
+        uses: actions/checkout@v6
+      - run: rustup update nightly
+      - run: rustup default nightly
+      - run: rustup component add rust-src
+      - run: cargo install cargo-fuzz
+      - name: Run fuzz_deflate
+        run: cargo +nightly fuzz run fuzz_deflate -- -max_len=4096 -max_total_time=30
+      - name: Run fuzz_zlib
+        run: cargo +nightly fuzz run fuzz_zlib -- -max_len=4096 -max_total_time=30
+      - name: Run fuzz_gzip
+        run: cargo +nightly fuzz run fuzz_gzip -- -max_len=4096 -max_total_time=30

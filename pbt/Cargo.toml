@@ -1,0 +1,12 @@
+[package]
+name = "pbt"
+version = "0.0.0"
+edition = "2024"
+publish = false
+
+[dev-dependencies]
+noflate = { path = ".." }
+proptest = "1"
+flate2 = "1"
+crc32fast = "1"
+adler32 = "1"

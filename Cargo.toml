@@ -18,5 +18,9 @@ flate2 = "1"
 crc32fast = "1"
 adler32 = "1"
 
+[workspace]
+members = ["pbt"]
+exclude = ["fuzz"]
+
 [lints.rust]
 missing_docs = "warn"
