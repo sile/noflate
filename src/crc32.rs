@@ -121,6 +121,8 @@ pub fn crc32(data: &[u8]) -> u32 {
 
 #[cfg(test)]
 mod tests {
+    use alloc::vec::Vec;
+
     use super::Crc32;
 
     fn checksum(data: &[u8]) -> u32 {
@@ -163,7 +165,7 @@ mod tests {
         for len in 0..=data.len() {
             let mut slow = Crc32::new();
             for &b in &data[..len] {
-                slow.update(std::slice::from_ref(&b));
+                slow.update(core::slice::from_ref(&b));
             }
             let fast = checksum(&data[..len]);
             assert_eq!(slow.value(), fast, "len={len}");

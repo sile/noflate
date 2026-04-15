@@ -6,6 +6,8 @@
 //!
 //! [`BitWriter`] appends bits to a caller-owned `Vec<u8>`.
 
+use alloc::vec::Vec;
+
 use crate::error::{Error, Result};
 
 /// Snapshot of a [`BitReader`]'s position, returned from
@@ -193,6 +195,9 @@ impl<'a> BitWriter<'a> {
 
 #[cfg(test)]
 mod tests {
+    use alloc::vec;
+    use alloc::vec::Vec;
+
     use super::{BitReader, BitWriter};
 
     #[test]

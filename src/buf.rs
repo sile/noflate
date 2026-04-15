@@ -6,6 +6,8 @@
 //! memory bounded when readers lag behind writers, the buffer compacts once
 //! its underlying `Vec` exceeds 1 MiB.
 
+use alloc::vec::Vec;
+
 #[derive(Debug, Default)]
 pub(crate) struct Buf {
     bytes: Vec<u8>,
@@ -55,6 +57,8 @@ impl Buf {
 
 #[cfg(test)]
 mod tests {
+    use alloc::vec;
+
     use super::Buf;
 
     #[test]

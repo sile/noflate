@@ -1,3 +1,4 @@
+#![no_std]
 #![forbid(unsafe_code)]
 
 //! A zero-dependency, sans-io DEFLATE (RFC 1951) encoder and decoder.
@@ -29,6 +30,13 @@
 //! assert!(decoder.is_finished());
 //! assert_eq!(out, b"hello");
 //! ```
+
+extern crate alloc;
+
+#[cfg(test)]
+extern crate std;
+
+use alloc::vec::Vec;
 
 mod adler32;
 mod bit;

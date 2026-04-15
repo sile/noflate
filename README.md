@@ -6,12 +6,13 @@ noflate
 [![Actions Status](https://github.com/sile/noflate/workflows/CI/badge.svg)](https://github.com/sile/noflate/actions)
 ![License](https://img.shields.io/crates/l/noflate)
 
-A sans-io DEFLATE / ZLIB / GZIP encoder and decoder with no dependencies.
+A `no_std` sans-io DEFLATE / ZLIB / GZIP encoder and decoder with no dependencies.
 
 Features
 --------
 
-- No dependencies; pure, portable, safe Rust
+- No dependencies; pure, portable, safe Rust (`#![forbid(unsafe_code)]`)
+- `no_std` compatible by default (requires `alloc`; no feature flag needed)
 - Sans-I/O streaming API — the library owns its buffers; the caller feeds bytes in and pulls bytes out. No `std::io::Read` / `std::io::Write` coupling, no implicit I/O.
 - DEFLATE (RFC 1951): encoder and decoder, all three block kinds (stored / fixed Huffman / dynamic Huffman)
 - ZLIB (RFC 1950) wrapper with Adler-32 verification

@@ -73,6 +73,8 @@ pub fn adler32(data: &[u8]) -> u32 {
 
 #[cfg(test)]
 mod tests {
+    use alloc::vec::Vec;
+
     use super::Adler32;
 
     fn checksum(data: &[u8]) -> u32 {

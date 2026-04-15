@@ -1,6 +1,6 @@
 //! Error and `Result` types for DEFLATE encoding and decoding.
 
-use std::borrow::Cow;
+use alloc::borrow::Cow;
 
 /// Errors returned by the encoder and decoder.
 #[derive(Debug, Clone, PartialEq, Eq)]

@@ -1,7 +1,9 @@
 //! GZIP container (RFC 1952) wrapping a raw DEFLATE stream with a 10-byte
 //! (or longer) header and an 8-byte trailer (CRC-32 + original size).
 
-use std::borrow::Cow;
+use alloc::borrow::Cow;
+use alloc::format;
+use alloc::vec::Vec;
 
 use crate::crc32::Crc32;
 use crate::decode::Decoder as DeflateDecoder;
@@ -388,6 +390,8 @@ pub fn decompress(data: &[u8]) -> Result<Vec<u8>> {
 
 #[cfg(test)]
 mod tests {
+    use alloc::vec::Vec;
+
     use super::{Decoder, compress, decompress};
 
     #[test]

@@ -4,8 +4,10 @@
 //! Adapted from `nopng::deflate`; the algorithms are unchanged but types
 //! are split out for reuse by the streaming codec.
 
-use std::cmp;
-use std::collections::BinaryHeap;
+use alloc::collections::BinaryHeap;
+use alloc::vec;
+use alloc::vec::Vec;
+use core::cmp;
 
 use crate::bit::{BitReader, BitWriter};
 use crate::error::{Error, Result};
@@ -276,6 +278,8 @@ fn package_merge_code_lengths(frequencies: &[usize], max_bitwidth: u8) -> Vec<u8
 
 #[cfg(test)]
 mod tests {
+    use alloc::vec::Vec;
+
     use super::{HuffmanDecoder, HuffmanEncoder, length_limited_code_lengths};
     use crate::bit::{BitReader, BitWriter};
     use crate::symbol::{END_OF_BLOCK, fixed_literal_code_lengths};

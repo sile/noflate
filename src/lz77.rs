@@ -8,6 +8,9 @@
 //! Adapted from `nopng::deflate::lz77_symbols`; the matching strategy is
 //! unchanged.
 
+use alloc::vec;
+use alloc::vec::Vec;
+
 use crate::symbol::{MAX_MATCH, MIN_MATCH, WINDOW_SIZE};
 
 const HASH_BITS: usize = 15;
@@ -165,6 +168,9 @@ impl MatchFinder {
 
 #[cfg(test)]
 mod tests {
+    use alloc::vec;
+    use alloc::vec::Vec;
+
     use super::{Lz77Code, MatchFinder};
 
     fn symbols(input: &[u8]) -> Vec<Lz77Code> {

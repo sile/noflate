@@ -1,7 +1,9 @@
 //! ZLIB container (RFC 1950) wrapping a raw DEFLATE stream with a 2-byte
 //! header and a 4-byte Adler-32 trailer.
 
-use std::borrow::Cow;
+use alloc::borrow::Cow;
+use alloc::format;
+use alloc::vec::Vec;
 
 use crate::adler32::Adler32;
 use crate::decode::Decoder as DeflateDecoder;
@@ -312,6 +314,8 @@ pub fn decompress(data: &[u8]) -> Result<Vec<u8>> {
 
 #[cfg(test)]
 mod tests {
+    use alloc::vec::Vec;
+
     use super::{Decoder, Encoder, compress, decompress};
 
     #[test]

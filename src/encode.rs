@@ -9,7 +9,8 @@
 //! sequence of 0xFFFF-byte stored blocks). This trades some memory for a
 //! straightforward implementation while still presenting the sans-io API.
 
-use std::cmp;
+use alloc::vec::Vec;
+use core::cmp;
 
 use crate::bit::BitWriter;
 use crate::error::Result;
@@ -369,6 +370,9 @@ fn build_bitwidth_codes(
 
 #[cfg(test)]
 mod tests {
+    use alloc::vec;
+    use alloc::vec::Vec;
+
     use super::{EncodeOptions, Encoder};
     use crate::decompress;
 

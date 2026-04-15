@@ -6,7 +6,9 @@
 //! `feed` call and waits for more input when a step needs more bits.
 //! "Need more bytes" is a no-op return from `feed`, not an error.
 
-use std::borrow::Cow;
+use alloc::borrow::Cow;
+use alloc::format;
+use alloc::vec::Vec;
 
 use crate::bit::BitReader;
 use crate::buf::Buf;
@@ -179,7 +181,7 @@ fn step(
     state: &mut DecodeState,
     output: &mut Vec<u8>,
 ) -> Result<StepOutcome> {
-    let current = std::mem::replace(state, DecodeState::Transient);
+    let current = core::mem::replace(state, DecodeState::Transient);
     match current {
         DecodeState::BlockHeader => step_block_header(reader, state),
         DecodeState::StoredAlignAndLen { is_final } => {
@@ -473,7 +475,7 @@ fn step_dynamic_code_lengths(
                         "repeat code 16 without a previous code".into(),
                     ));
                 };
-                all_code_lengths.extend(std::iter::repeat_n(last, repeat as usize));
+                all_code_lengths.extend(core::iter::repeat_n(last, repeat as usize));
             }
             17 => {
                 let repeat = match reader.read_bits(3) {
@@ -492,7 +494,7 @@ fn step_dynamic_code_lengths(
                     }
                     Err(e) => return Err(e),
                 };
-                all_code_lengths.extend(std::iter::repeat_n(0, repeat as usize));
+                all_code_lengths.extend(core::iter::repeat_n(0, repeat as usize));
             }
             18 => {
                 let repeat = match reader.read_bits(7) {
@@ -511,7 +513,7 @@ fn step_dynamic_code_lengths(
                     }
                     Err(e) => return Err(e),
                 };
-                all_code_lengths.extend(std::iter::repeat_n(0, repeat as usize));
+                all_code_lengths.extend(core::iter::repeat_n(0, repeat as usize));
             }
             _ => {
                 return Err(Error::InvalidData(Cow::Owned(format!(
@@ -696,6 +698,8 @@ fn copy_from_distance(output: &mut Vec<u8>, distance: usize, length: usize) -> R
 
 #[cfg(test)]
 mod tests {
+    use alloc::vec::Vec;
+
     use super::Decoder;
 
     fn decompress_once(input: &[u8]) -> Vec<u8> {

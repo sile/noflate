@@ -43,3 +43,14 @@ jobs:
       - run: rustup component add rustfmt clippy
       - run: cargo fmt --all -- --check
       - run: cargo clippy --all-targets -- -D warnings
+
+  no-std:
+    name: no_std
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout sources
+        uses: actions/checkout@v6
+      - run: rustup update stable
+      - run: rustup default stable
+      - run: rustup target add thumbv6m-none-eabi
+      - run: cargo check --lib --target thumbv6m-none-eabi

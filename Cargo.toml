@@ -5,11 +5,11 @@ edition = "2024"
 rust-version = "1.88"
 authors = ["Takeru Ohta <phjgt308@gmail.com>"]
 license = "MIT"
-description = "A sans-io DEFLATE / ZLIB / GZIP encoder and decoder with no dependencies"
+description = "A no_std sans-io DEFLATE / ZLIB / GZIP encoder and decoder with no dependencies"
 homepage = "https://github.com/sile/noflate"
 repository = "https://github.com/sile/noflate"
 readme = "README.md"
-categories = ["compression", "encoding"]
+categories = ["compression", "encoding", "no-std"]
 
 [dependencies]
 
