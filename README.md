@@ -17,7 +17,6 @@ Features
 - ZLIB (RFC 1950) wrapper with Adler-32 verification
 - GZIP (RFC 1952) wrapper with CRC-32 + ISIZE verification
 - Streaming [`Adler32`] and [`Crc32`] primitives (slice-by-16 CRC-32)
-- Binary-compatible with `flate2` in both directions
 
 [`Adler32`]: https://docs.rs/noflate/latest/noflate/struct.Adler32.html
 [`Crc32`]: https://docs.rs/noflate/latest/noflate/struct.Crc32.html
