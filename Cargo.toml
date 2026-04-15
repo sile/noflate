@@ -7,6 +7,8 @@ edition = "2024"
 
 [dev-dependencies]
 flate2 = "1"
+crc32fast = "1"
+adler32 = "1"
 
 [lints.rust]
 missing_docs = "warn"

@@ -28,15 +28,21 @@
 //! assert_eq!(out, b"hello");
 //! ```
 
+mod adler32;
 mod bit;
 mod buf;
+mod crc32;
 mod decode;
 mod encode;
 mod error;
+pub mod gzip;
 mod huffman;
 mod lz77;
 mod symbol;
+pub mod zlib;
 
+pub use adler32::{Adler32, adler32};
+pub use crc32::{Crc32, crc32};
 pub use decode::Decoder;
 pub use encode::{EncodeOptions, Encoder};
 pub use error::{Error, Result};
