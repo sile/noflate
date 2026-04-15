@@ -164,7 +164,7 @@ fn main() {
     let cases: Vec<(&str, Vec<u8>)> = vec![
         ("english_1k", make_english_text(1_024)),
         ("english_64k", make_english_text(64 * 1024)),
-        ("english_1m", make_english_text(1 * 1024 * 1024)),
+        ("english_1m", make_english_text(1024 * 1024)),
         ("zeros_64k", make_zeros(64 * 1024)),
         ("random_64k", make_random(64 * 1024)),
     ];
