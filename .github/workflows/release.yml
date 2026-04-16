@@ -6,6 +6,7 @@ on:
 
 jobs:
   github-release:
+    if: ${{ !startsWith(github.ref_name, 'v0.0.') }}
     runs-on: ubuntu-latest
     permissions:
       contents: write
@@ -17,6 +18,7 @@ jobs:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
   publish:
+    if: ${{ !cancelled() && (needs.github-release.result == 'success' || needs.github-release.result == 'skipped') }}
     needs: github-release
     runs-on: ubuntu-latest
     # environment: release  # Optional: for enhanced security
