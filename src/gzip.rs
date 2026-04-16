@@ -162,6 +162,11 @@ impl Decoder {
                         let tail: Vec<u8> = self.deflate.remaining_input().to_vec();
                         self.state = State::Trailer;
                         for byte in tail {
+                            if self.state == State::Done {
+                                return Err(Error::InvalidData(
+                                    "bytes fed after gzip stream end".into(),
+                                ));
+                            }
                             self.feed_trailer_byte(byte)?;
                         }
                     }
