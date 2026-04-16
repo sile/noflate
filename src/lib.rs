@@ -57,6 +57,48 @@ pub use decode::Decoder;
 pub use encode::{EncodeOptions, Encoder};
 pub use error::{Error, Result};
 
+/// The detected compression format of a byte stream.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+pub enum Format {
+    /// Raw DEFLATE (RFC 1951).
+    Deflate,
+    /// ZLIB container (RFC 1950).
+    Zlib,
+    /// GZIP container (RFC 1952).
+    Gzip,
+}
+
+/// Inspect the first bytes of `data` and return the detected compression format.
+///
+/// Returns `None` if `data` is shorter than 2 bytes.
+///
+/// Detection order:
+/// 1. **Gzip** — magic bytes `0x1F 0x8B`.
+/// 2. **Zlib** — CM=8, CINFO≤7, and the FCHECK checksum passes.
+/// 3. **Deflate** — fallback for anything else.
+pub fn inspect(data: &[u8]) -> Option<Format> {
+    if data.len() < 2 {
+        return None;
+    }
+
+    // Gzip magic (RFC 1952).
+    if data[0] == 0x1F && data[1] == 0x8B {
+        return Some(Format::Gzip);
+    }
+
+    // Zlib header (RFC 1950).
+    let cmf = data[0];
+    let flg = data[1];
+    if (cmf & 0x0F) == 8
+        && (cmf >> 4) <= 7
+        && (u16::from(cmf) * 256 + u16::from(flg)) % 31 == 0
+    {
+        return Some(Format::Zlib);
+    }
+
+    Some(Format::Deflate)
+}
+
 /// Decompress a complete DEFLATE stream into a new `Vec<u8>`.
 ///
 /// Returns an error if the input is not a valid DEFLATE stream or ends
