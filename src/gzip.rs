@@ -5,6 +5,7 @@ use alloc::borrow::Cow;
 use alloc::format;
 use alloc::vec::Vec;
 
+use crate::buf::Buf;
 use crate::crc32::Crc32;
 use crate::decode::Decoder as DeflateDecoder;
 use crate::encode::{EncodeOptions, Encoder as DeflateEncoder};
@@ -35,7 +36,7 @@ pub struct Decoder {
     trailer: [u8; 8],
     trailer_filled: u8,
     finished: bool,
-    decoded_output: Vec<u8>,
+    output: Buf,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -74,7 +75,7 @@ impl Decoder {
             trailer: [0; 8],
             trailer_filled: 0,
             finished: false,
-            decoded_output: Vec::new(),
+            output: Buf::new(),
         }
     }
 
@@ -155,20 +156,12 @@ impl Decoder {
                     let new_bytes = self.deflate.output();
                     self.crc.update(new_bytes);
                     self.size = self.size.wrapping_add(new_bytes.len() as u32);
-                    self.decoded_output.extend_from_slice(new_bytes);
+                    self.output.feed(new_bytes);
                     let n = new_bytes.len();
                     self.deflate.advance(n);
                     if self.deflate.is_finished() {
-                        let tail: Vec<u8> = self.deflate.remaining_input().to_vec();
                         self.state = State::Trailer;
-                        for byte in tail {
-                            if self.state == State::Done {
-                                return Err(Error::InvalidData(
-                                    "bytes fed after gzip stream end".into(),
-                                ));
-                            }
-                            self.feed_trailer_byte(byte)?;
-                        }
+                        self.consume_deflate_tail()?;
                     }
                 }
                 State::Trailer => {
@@ -187,13 +180,12 @@ impl Decoder {
 
     /// Borrow decompressed bytes not yet advanced.
     pub fn output(&self) -> &[u8] {
-        &self.decoded_output
+        self.output.get()
     }
 
     /// Mark `n` bytes of output as consumed.
     pub fn advance(&mut self, n: usize) {
-        assert!(n <= self.decoded_output.len(), "advance past end of output");
-        self.decoded_output.drain(..n);
+        self.output.advance(n);
     }
 
     /// `true` once the trailer has been fully consumed and validated.
@@ -269,6 +261,21 @@ impl Decoder {
         }
         Ok(())
     }
+
+    fn consume_deflate_tail(&mut self) -> Result<()> {
+        let tail = self.deflate.remaining_input();
+        let tail_len = tail.len();
+        let mut trailer_bytes = [0u8; 8];
+        let copied = tail_len.min(trailer_bytes.len());
+        trailer_bytes[..copied].copy_from_slice(&tail[..copied]);
+        for &byte in &trailer_bytes[..copied] {
+            self.feed_trailer_byte(byte)?;
+        }
+        if tail_len > trailer_bytes.len() {
+            return Err(Error::InvalidData("bytes fed after gzip stream end".into()));
+        }
+        Ok(())
+    }
 }
 
 /// Streaming sans-io gzip encoder.
@@ -329,9 +336,9 @@ impl Encoder {
         }
         self.ensure_header();
         self.deflate.finish()?;
-        let deflate_bytes = self.deflate.output().to_vec();
-        self.output.extend_from_slice(&deflate_bytes);
-        self.deflate.advance(deflate_bytes.len());
+        let produced = self.deflate.output().len();
+        self.output.extend_from_slice(self.deflate.output());
+        self.deflate.advance(produced);
         self.output
             .extend_from_slice(&self.crc.value().to_le_bytes());
         self.output.extend_from_slice(&self.size.to_le_bytes());

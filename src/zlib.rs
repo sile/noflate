@@ -6,6 +6,7 @@ use alloc::format;
 use alloc::vec::Vec;
 
 use crate::adler32::Adler32;
+use crate::buf::Buf;
 use crate::decode::Decoder as DeflateDecoder;
 use crate::encode::{EncodeOptions, Encoder as DeflateEncoder};
 use crate::error::{Error, Result};
@@ -29,7 +30,7 @@ pub struct Decoder {
     trailer: [u8; 4],
     trailer_filled: u8,
     finished: bool,
-    drained_output: Vec<u8>,
+    output: Buf,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -58,7 +59,7 @@ impl Decoder {
             trailer: [0; 4],
             trailer_filled: 0,
             finished: false,
-            drained_output: Vec::new(),
+            output: Buf::new(),
         }
     }
 
@@ -82,22 +83,13 @@ impl Decoder {
                     self.deflate.feed(rest)?;
                     let new_bytes = self.deflate.output();
                     self.adler.update(new_bytes);
-                    self.drained_output.extend_from_slice(new_bytes);
+                    self.output.feed(new_bytes);
                     let n = new_bytes.len();
                     self.deflate.advance(n);
                     if self.deflate.is_finished() {
-                        // Any bytes the caller fed past the final DEFLATE
-                        // block belong to the Adler-32 trailer. Pull them
-                        // back out of the deflate input buffer.
-                        let tail: Vec<u8> = self.deflate.remaining_input().to_vec();
                         self.state = State::Trailer;
                         rest = &[];
-                        // Re-enter the state machine with the saved tail
-                        // as the "next" bytes. We do this by pushing it
-                        // through the remaining states of this loop.
-                        for byte in tail {
-                            self.feed_byte_in_trailer(byte)?;
-                        }
+                        self.consume_deflate_tail()?;
                     } else {
                         rest = &[];
                     }
@@ -129,13 +121,12 @@ impl Decoder {
 
     /// Borrow decompressed bytes that have not yet been advanced.
     pub fn output(&self) -> &[u8] {
-        &self.drained_output
+        self.output.get()
     }
 
     /// Mark `n` bytes of output as consumed.
     pub fn advance(&mut self, n: usize) {
-        assert!(n <= self.drained_output.len(), "advance past end of output");
-        self.drained_output.drain(..n);
+        self.output.advance(n);
     }
 
     /// `true` once the header + deflate stream + valid Adler-32 trailer
@@ -164,6 +155,21 @@ impl Decoder {
             State::Done => Err(Error::InvalidData("bytes fed after zlib stream end".into())),
             _ => unreachable!("feed_byte_in_trailer in unexpected state"),
         }
+    }
+
+    fn consume_deflate_tail(&mut self) -> Result<()> {
+        let tail = self.deflate.remaining_input();
+        let tail_len = tail.len();
+        let mut trailer_bytes = [0u8; 4];
+        let copied = tail_len.min(trailer_bytes.len());
+        trailer_bytes[..copied].copy_from_slice(&tail[..copied]);
+        for &byte in &trailer_bytes[..copied] {
+            self.feed_byte_in_trailer(byte)?;
+        }
+        if tail_len > trailer_bytes.len() {
+            return Err(Error::InvalidData("bytes fed after zlib stream end".into()));
+        }
+        Ok(())
     }
 }
 
@@ -259,9 +265,9 @@ impl Encoder {
             self.header_emitted = true;
         }
         self.deflate.finish()?;
-        let deflate_bytes = self.deflate.output().to_vec();
-        self.output.extend_from_slice(&deflate_bytes);
-        self.deflate.advance(deflate_bytes.len());
+        let produced = self.deflate.output().len();
+        self.output.extend_from_slice(self.deflate.output());
+        self.deflate.advance(produced);
         self.output
             .extend_from_slice(&self.adler.value().to_be_bytes());
         self.finishing = true;

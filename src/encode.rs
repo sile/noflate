@@ -74,6 +74,7 @@ pub struct Encoder {
     input: Vec<u8>,
     output: Vec<u8>,
     matcher: MatchFinder,
+    symbols: Vec<Lz77Code>,
     drained: usize,
     finishing: bool,
 }
@@ -97,6 +98,7 @@ impl Encoder {
             input: Vec::new(),
             output: Vec::new(),
             matcher: MatchFinder::new(),
+            symbols: Vec::new(),
             drained: 0,
             finishing: false,
         }
@@ -187,7 +189,7 @@ impl Encoder {
     }
 
     fn emit_fixed_block(&mut self) -> Result<()> {
-        let symbols = self.matcher.symbols(&self.input);
+        self.matcher.fill_symbols(&self.input, &mut self.symbols);
         let literal_lengths = fixed_literal_code_lengths();
         let distance_lengths = fixed_distance_code_lengths();
         let literal_encoder = HuffmanEncoder::from_code_lengths(&literal_lengths)?;
@@ -196,17 +198,17 @@ impl Encoder {
         let mut w = BitWriter::new(&mut self.output);
         w.write_bit(true);
         w.write_bits(2, 0b01);
-        write_symbols(&mut w, &symbols, &literal_encoder, &distance_encoder);
+        write_symbols(&mut w, &self.symbols, &literal_encoder, &distance_encoder);
         w.finish();
         Ok(())
     }
 
     fn emit_dynamic_block(&mut self) -> Result<()> {
-        let symbols = self.matcher.symbols(&self.input);
+        self.matcher.fill_symbols(&self.input, &mut self.symbols);
         let mut literal_frequencies = [0usize; 286];
         let mut distance_frequencies = [0usize; 30];
         let mut has_distance = false;
-        for symbol in &symbols {
+        for symbol in &self.symbols {
             match *symbol {
                 Lz77Code::Literal(byte) => literal_frequencies[byte as usize] += 1,
                 Lz77Code::Pointer { length, distance } => {
@@ -272,7 +274,7 @@ impl Encoder {
                 w.write_bits(extra_bits, u16::from(extra));
             }
         }
-        write_symbols(&mut w, &symbols, &literal_encoder, &distance_encoder);
+        write_symbols(&mut w, &self.symbols, &literal_encoder, &distance_encoder);
         w.finish();
         Ok(())
     }

@@ -1,9 +1,9 @@
 //! LZ77 match finder used by the encoder.
 //!
 //! [`MatchFinder`] owns the hash-chain tables (`head` + `prev`, 256 KiB
-//! combined) so they can be reused across multiple encode calls. For a
-//! one-shot encode pass, [`MatchFinder::symbols`] emits the full
-//! `Vec<Lz77Code>` for the input.
+//! combined) so they can be reused across multiple encode calls. Callers
+//! provide the `Vec<Lz77Code>` scratch buffer so the token allocation can
+//! also be reused across encode passes.
 //!
 //! Adapted from `nopng::deflate::lz77_symbols`; the matching strategy is
 //! unchanged.
@@ -76,22 +76,23 @@ impl MatchFinder {
         }
     }
 
-    /// Produce LZ77 tokens for `input`. Previous contents of the hash
-    /// tables are reset lazily; `prev` does not need to be reset because
-    /// every entry is overwritten before being read (each position
-    /// writes `prev[pos & mask]` before later code walks the chain
-    /// through that same index).
-    pub(crate) fn symbols(&mut self, input: &[u8]) -> Vec<Lz77Code> {
+    /// Produce LZ77 tokens for `input` into `symbols`. Previous contents
+    /// of the hash tables are reset lazily; `prev` does not need to be
+    /// reset because every entry is overwritten before being read (each
+    /// position writes `prev[pos & mask]` before later code walks the
+    /// chain through that same index).
+    pub(crate) fn fill_symbols(&mut self, input: &[u8], symbols: &mut Vec<Lz77Code>) {
         if self.head_dirty {
             self.head.iter_mut().for_each(|slot| *slot = NIL);
         }
         self.head_dirty = true;
-        let mut symbols = Vec::new();
+        symbols.clear();
+        symbols.reserve(input.len().saturating_sub(symbols.capacity()));
         if input.len() < MIN_MATCH {
             for &byte in input {
                 symbols.push(Lz77Code::Literal(byte));
             }
-            return symbols;
+            return;
         }
 
         let head = &mut self.head[..];
@@ -162,7 +163,6 @@ impl MatchFinder {
                 cursor += 1;
             }
         }
-        symbols
     }
 }
 
@@ -174,7 +174,10 @@ mod tests {
     use super::{Lz77Code, MatchFinder};
 
     fn symbols(input: &[u8]) -> Vec<Lz77Code> {
-        MatchFinder::new().symbols(input)
+        let mut matcher = MatchFinder::new();
+        let mut symbols = Vec::new();
+        matcher.fill_symbols(input, &mut symbols);
+        symbols
     }
 
     #[test]
@@ -210,8 +213,9 @@ mod tests {
     #[test]
     fn matcher_reuses_tables_across_calls() {
         let mut m = MatchFinder::new();
+        let mut syms = Vec::new();
         for _ in 0..3 {
-            let syms = m.symbols(b"banana banana");
+            m.fill_symbols(b"banana banana", &mut syms);
             assert!(syms.iter().any(|c| matches!(c, Lz77Code::Pointer { .. })));
         }
     }
