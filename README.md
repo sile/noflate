@@ -77,8 +77,8 @@ The numbers below are **rough indicators only** — throughput fluctuates substa
 
 |        | noflate (ubuntu) | flate2 (ubuntu) | noflate (macos) | flate2 (macos) |
 |--------|-----------------:|----------------:|----------------:|---------------:|
-| encode |              402 |             363 |             603 |            994 |
-| decode |             1839 |            3230 |            4743 |           3019 |
+| encode |              427 |             363 |             645 |           1067 |
+| decode |             6564 |            3166 |            7111 |           3617 |
 
 **Encode compression ratio** (`compressed / original` — deterministic, identical across runners):
 
@@ -96,13 +96,13 @@ Noflate's ratio is within ~0.1 % of `flate2` across the board — slightly bette
 
 |          | noflate (ubuntu) | reference (ubuntu)     | noflate (macos) | reference (macos)    |
 |----------|-----------------:|-----------------------:|----------------:|---------------------:|
-| CRC-32   |             2258 |    11510 (`crc32fast`) |            3053 |   7959 (`crc32fast`) |
-| Adler-32 |             3038 |      3004 (`adler32`)  |            2849 |     2662 (`adler32`) |
+| CRC-32   |             2259 |   12178 (`crc32fast`)  |            3275 |   8545 (`crc32fast`) |
+| Adler-32 |             3037 |      3020 (`adler32`)  |            2965 |     2858 (`adler32`) |
 
 Notes on these numbers:
 
-- The DEFLATE **decoder** is usually faster than `flate2` on text — but not always. The 1 MiB case on the Ubuntu runner is the exception (1.8× slower); smaller sizes and random data favour noflate. See the raw workflow logs for the full matrix.
-- The DEFLATE **encoder** is within ~2× of `flate2` on long text; per-call setup cost dominates near 1 KiB inputs (4–5× slower there).
+- The DEFLATE **decoder** is consistently faster than `flate2` on text — roughly 2× on both runners for the 1 MiB case. Random data also favours noflate. See the raw workflow logs for the full matrix.
+- The DEFLATE **encoder** is competitive with `flate2` on long text — faster on Ubuntu (~1.2×) but slower on macOS (~0.6×); per-call setup cost dominates near 1 KiB inputs (4–5× slower there).
 - **Adler-32** matches the `adler32` crate on both runners.
 - **CRC-32** is 2.5×–5× slower than `crc32fast`'s PCLMULQDQ path — the price of staying portable, safe (`#![forbid(unsafe_code)]`), and free of CPU-specific intrinsics.
 
