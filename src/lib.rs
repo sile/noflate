@@ -115,7 +115,7 @@ pub fn decompress(compressed: &[u8]) -> Result<Vec<u8>> {
 
 /// Compress a byte slice into a new DEFLATE stream with default options.
 pub fn compress(uncompressed: &[u8]) -> Result<Vec<u8>> {
-    let mut encoder = Encoder::new();
+    let mut encoder = Encoder::with_options(EncodeOptions::new().buffer_all_input());
     encoder.feed(uncompressed)?;
     encoder.finish()?;
     let out = encoder.output().to_vec();

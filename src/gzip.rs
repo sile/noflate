@@ -326,6 +326,11 @@ impl Encoder {
         self.crc.update(data);
         self.size = self.size.wrapping_add(data.len() as u32);
         self.deflate.feed(data)?;
+        let produced = self.deflate.output().len();
+        if produced > 0 {
+            self.output.extend_from_slice(self.deflate.output());
+            self.deflate.advance(produced);
+        }
         Ok(())
     }
 
@@ -378,7 +383,7 @@ impl Encoder {
 
 /// One-shot: compress a slice into a new gzip stream.
 pub fn compress(data: &[u8]) -> Result<Vec<u8>> {
-    let mut e = Encoder::new();
+    let mut e = Encoder::with_options(EncodeOptions::new().buffer_all_input());
     e.feed(data)?;
     e.finish()?;
     let out = e.output().to_vec();

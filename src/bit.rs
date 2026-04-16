@@ -154,11 +154,18 @@ pub(crate) struct BitWriter<'a> {
 }
 
 impl<'a> BitWriter<'a> {
+    #[cfg(test)]
     pub(crate) fn new(output: &'a mut Vec<u8>) -> Self {
+        Self::new_seeded(output, 0, 0)
+    }
+
+    /// Create a writer seeded with buffered bits left over from a
+    /// previous block.
+    pub(crate) fn new_seeded(output: &'a mut Vec<u8>, bit_buffer: u64, bit_count: u8) -> Self {
         Self {
             output,
-            bit_buffer: 0,
-            bit_count: 0,
+            bit_buffer,
+            bit_count,
         }
     }
 
@@ -184,6 +191,12 @@ impl<'a> BitWriter<'a> {
             self.bit_buffer = 0;
             self.bit_count = 0;
         }
+    }
+
+    /// Consume the writer and return the current `(bit_buffer, bit_count)`
+    /// without flushing to a byte boundary.
+    pub(crate) fn bit_state(self) -> (u64, u8) {
+        (self.bit_buffer, self.bit_count)
     }
 
     /// Equivalent to calling [`BitWriter::align_to_byte`] and dropping the
