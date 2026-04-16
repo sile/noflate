@@ -57,11 +57,12 @@ assert_eq!(noflate::zlib::decompress(&zl).unwrap(), b"hello world");
 Benchmarks
 ----------
 
-The repository ships two benchmark binaries:
+The repository ships three benchmark binaries:
 
 ```sh
 BENCH_REPEATS=30 cargo run --release --example bench
 BENCH_REPEATS=30 cargo run --release --example bench_checksum
+BENCH_REPEATS=30 cargo run --release --example bench_wrappers
 ```
 
 The numbers below are **rough indicators only** — throughput fluctuates substantially with hardware, runner load, workload size, and specific input. Depending on the environment, noflate can be faster or slower than `flate2` on the same operation. Re-run the [`Benchmark`](.github/workflows/benchmark.yml) workflow (Actions → Benchmark → Run workflow) or run the examples locally before making performance-sensitive decisions.

@@ -63,6 +63,11 @@ jobs:
           BENCH_REPEATS: ${{ inputs.repeats }}
         run: cargo run --release --example bench_checksum | tee bench_checksum.txt
 
+      - name: Wrapper benchmark
+        env:
+          BENCH_REPEATS: ${{ inputs.repeats }}
+        run: cargo run --release --example bench_wrappers | tee bench_wrappers.txt
+
       - name: Upload results
         uses: actions/upload-artifact@v4
         with:
@@ -70,3 +75,4 @@ jobs:
           path: |
             bench.txt
             bench_checksum.txt
+            bench_wrappers.txt
