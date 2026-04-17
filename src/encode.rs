@@ -191,16 +191,7 @@ impl Encoder {
             let chunk = mem::take(&mut self.input);
             self.emit_block_chunk(&chunk, false)?;
         }
-        {
-            let mut w = BitWriter::new_seeded(&mut self.output, self.bit_buffer, self.bit_count);
-            w.write_bit(false);
-            w.write_bits(2, 0b00);
-            w.align_to_byte();
-        }
-        self.bit_buffer = 0;
-        self.bit_count = 0;
-        self.output.extend_from_slice(&[0, 0, 0xFF, 0xFF]);
-        Ok(())
+        self.emit_stored_chunk(&[], false)
     }
 
     /// Drop the LZ77 sliding window so subsequent blocks encode no
@@ -249,18 +240,16 @@ impl Encoder {
     fn emit_stored_chunk(&mut self, chunk: &[u8], is_final: bool) -> Result<()> {
         let total = chunk.len();
         if total == 0 {
-            if is_final {
-                {
-                    let mut w =
-                        BitWriter::new_seeded(&mut self.output, self.bit_buffer, self.bit_count);
-                    w.write_bit(true);
-                    w.write_bits(2, 0b00);
-                    w.align_to_byte();
-                }
-                self.bit_buffer = 0;
-                self.bit_count = 0;
-                self.output.extend_from_slice(&[0, 0, 0xFF, 0xFF]);
+            {
+                let mut w =
+                    BitWriter::new_seeded(&mut self.output, self.bit_buffer, self.bit_count);
+                w.write_bit(is_final);
+                w.write_bits(2, 0b00);
+                w.align_to_byte();
             }
+            self.bit_buffer = 0;
+            self.bit_count = 0;
+            self.output.extend_from_slice(&[0, 0, 0xFF, 0xFF]);
             return Ok(());
         }
         let mut offset = 0usize;
