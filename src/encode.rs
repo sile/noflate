@@ -172,6 +172,49 @@ impl Encoder {
         Ok(())
     }
 
+    /// Flush pending input as a non-final block and append a sync flush
+    /// marker so the stream ends on a byte boundary with the 4-byte trailer
+    /// `0x00 0x00 0xFF 0xFF` (an empty stored block with BFINAL=0).
+    ///
+    /// The stream remains continuable: subsequent [`Encoder::feed`] calls
+    /// append further blocks, and [`Encoder::finish`] still emits the
+    /// final block. Intended for protocols that frame messages over a
+    /// single DEFLATE stream, such as WebSocket `permessage-deflate`
+    /// (RFC 7692). Returns an error if called after [`Encoder::finish`].
+    pub fn sync_flush(&mut self) -> Result<()> {
+        if self.finishing {
+            return Err(crate::error::Error::InvalidData(
+                "sync_flush called after encoder finish".into(),
+            ));
+        }
+        if !self.input.is_empty() {
+            let chunk = mem::take(&mut self.input);
+            self.emit_block_chunk(&chunk, false)?;
+        }
+        {
+            let mut w = BitWriter::new_seeded(&mut self.output, self.bit_buffer, self.bit_count);
+            w.write_bit(false);
+            w.write_bits(2, 0b00);
+            w.align_to_byte();
+        }
+        self.bit_buffer = 0;
+        self.bit_count = 0;
+        self.output.extend_from_slice(&[0, 0, 0xFF, 0xFF]);
+        Ok(())
+    }
+
+    /// Drop the LZ77 sliding window so subsequent blocks encode no
+    /// back-references into input fed before this call.
+    ///
+    /// Intended for `permessage-deflate` senders that negotiated
+    /// `server_no_context_takeover` or `client_no_context_takeover`
+    /// (RFC 7692 §7.1.1): call after [`Encoder::sync_flush`] at each
+    /// message boundary. Does not touch pending output, options, or the
+    /// bit buffer.
+    pub fn reset_history(&mut self) {
+        self.matcher = MatchFinder::new();
+    }
+
     /// Borrow bytes of compressed output not yet consumed via
     /// [`Encoder::advance`].
     pub fn output(&self) -> &[u8] {
@@ -444,7 +487,7 @@ mod tests {
     use alloc::vec::Vec;
 
     use super::{EncodeOptions, Encoder};
-    use crate::decompress;
+    use crate::{Decoder, decompress};
 
     fn compress_with(opts: EncodeOptions, input: &[u8]) -> Vec<u8> {
         let mut e = Encoder::with_options(opts);
@@ -548,5 +591,97 @@ mod tests {
             let compressed = compress_with(opts.clone(), &input);
             assert_eq!(decompress(&compressed).unwrap(), input);
         }
+    }
+
+    #[test]
+    fn sync_flush_marker_is_empty_stored_block() {
+        let mut e = Encoder::new();
+        e.sync_flush().unwrap();
+        // From bit state (0, 0): write_bit(false) + write_bits(2, 0b00)
+        // + align_to_byte pads out to one 0x00 byte; then the 4-byte
+        // trailer is appended literally.
+        assert_eq!(e.output(), &[0x00, 0x00, 0x00, 0xFF, 0xFF]);
+    }
+
+    #[test]
+    fn sync_flush_then_finish_roundtrip() {
+        for opts in [
+            EncodeOptions::new(),
+            EncodeOptions::new().fixed_huffman(),
+            EncodeOptions::new().stored(),
+        ] {
+            let mut e = Encoder::with_options(opts);
+            e.feed(b"hello ").unwrap();
+            e.sync_flush().unwrap();
+            e.feed(b"world").unwrap();
+            e.finish().unwrap();
+            let out = e.output().to_vec();
+            e.advance(out.len());
+            assert!(e.is_finished());
+            assert_eq!(decompress(&out).unwrap(), b"hello world");
+        }
+    }
+
+    #[test]
+    fn permessage_deflate_style_framing_roundtrip() {
+        // Mirror the RFC 7692 sender/receiver pattern: strip the 4-byte
+        // trailer per message, re-append on the receiver, decode streaming.
+        let messages: &[&[u8]] = &[
+            b"the quick brown fox",
+            b"jumps over the lazy dog",
+            b"hello again",
+        ];
+        let mut e = Encoder::new();
+        let mut wire: Vec<Vec<u8>> = Vec::new();
+        for msg in messages {
+            e.feed(msg).unwrap();
+            e.sync_flush().unwrap();
+            let mut frame = e.output().to_vec();
+            e.advance(frame.len());
+            assert!(frame.ends_with(&[0x00, 0x00, 0xFF, 0xFF]));
+            frame.truncate(frame.len() - 4);
+            wire.push(frame);
+        }
+        let mut d = Decoder::new();
+        for frame in &wire {
+            d.feed(frame).unwrap();
+            d.feed(&[0x00, 0x00, 0xFF, 0xFF]).unwrap();
+        }
+        let decoded = d.output().to_vec();
+        let expected: Vec<u8> = messages.iter().flat_map(|m| m.iter().copied()).collect();
+        assert_eq!(decoded, expected);
+    }
+
+    #[test]
+    fn reset_history_drops_backrefs_to_prior_input() {
+        // With a cross-message-repeating payload, reset_history must
+        // produce the same bytes as a fresh encoder — the LZ77 matcher
+        // cannot see the first message's bytes anymore.
+        let payload = b"abcdefghijklmnopqrstuvwxyz0123456789";
+
+        let mut fresh = Encoder::new();
+        fresh.feed(payload).unwrap();
+        fresh.sync_flush().unwrap();
+        let baseline = fresh.output().to_vec();
+
+        let mut e = Encoder::new();
+        e.feed(payload).unwrap();
+        e.sync_flush().unwrap();
+        let first_len = e.output().len();
+        e.advance(first_len);
+        e.reset_history();
+        e.feed(payload).unwrap();
+        e.sync_flush().unwrap();
+        let second = e.output().to_vec();
+        e.advance(second.len());
+        assert_eq!(second, baseline);
+    }
+
+    #[test]
+    fn sync_flush_after_finish_errors() {
+        let mut e = Encoder::new();
+        e.feed(b"data").unwrap();
+        e.finish().unwrap();
+        assert!(e.sync_flush().is_err());
     }
 }

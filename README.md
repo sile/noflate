@@ -54,6 +54,40 @@ let zl = noflate::zlib::compress(b"hello world").unwrap();
 assert_eq!(noflate::zlib::decompress(&zl).unwrap(), b"hello world");
 ```
 
+### WebSocket permessage-deflate (RFC 7692)
+
+`Encoder::sync_flush` frames messages over a single DEFLATE stream by
+appending an empty `BFINAL=0` stored block that byte-aligns the output
+with the 4-byte trailer `0x00 0x00 0xFF 0xFF`. `Encoder::reset_history`
+drops the LZ77 sliding window so the next message emits no
+back-references into the previous one — the requirement behind
+`*_no_context_takeover` in [RFC 7692 §7.1.1](https://www.rfc-editor.org/rfc/rfc7692#section-7.1.1).
+
+```rust
+// Sender (per RFC 7692 §7.2.1).
+let mut encoder = noflate::Encoder::new();
+encoder.feed(b"hello").unwrap();
+encoder.sync_flush().unwrap();
+let mut frame = encoder.output().to_vec();
+encoder.advance(frame.len());
+assert!(frame.ends_with(&[0x00, 0x00, 0xFF, 0xFF]));
+frame.truncate(frame.len() - 4);       // strip the trailer per RFC
+// ... send `frame` as the WebSocket payload ...
+encoder.reset_history();               // only if no_context_takeover
+
+// Receiver (per RFC 7692 §7.2.2): append the stripped trailer back.
+let mut decoder = noflate::Decoder::new();
+decoder.feed(&frame).unwrap();
+decoder.feed(&[0x00, 0x00, 0xFF, 0xFF]).unwrap();
+let message = decoder.output().to_vec();
+decoder.advance(message.len());
+assert_eq!(message, b"hello");
+```
+
+The decoder needs no explicit reset: the sender guarantees no
+back-reference crosses a message boundary under `*_no_context_takeover`,
+so subsequent frames can be fed into the same `Decoder` instance.
+
 Benchmarks
 ----------
 
@@ -112,3 +146,4 @@ References
 - DEFLATE: [RFC 1951](https://www.rfc-editor.org/rfc/rfc1951)
 - ZLIB: [RFC 1950](https://www.rfc-editor.org/rfc/rfc1950)
 - GZIP: [RFC 1952](https://www.rfc-editor.org/rfc/rfc1952)
+- WebSocket per-message compression: [RFC 7692](https://www.rfc-editor.org/rfc/rfc7692)
