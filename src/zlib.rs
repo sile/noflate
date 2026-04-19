@@ -1,5 +1,14 @@
-//! ZLIB container (RFC 1950) wrapping a raw DEFLATE stream with a 2-byte
-//! header and a 4-byte Adler-32 trailer.
+//! ZLIB (RFC 1950) encoder and decoder.
+//!
+//! ```
+//! let compressed = noflate::zlib::compress(b"hello").unwrap();
+//! assert_eq!(noflate::zlib::decompress(&compressed).unwrap(), b"hello");
+//! ```
+//!
+//! See [`Encoder`] and [`Decoder`] for the streaming API.
+//!
+//! This module also provides [`Adler32`] and [`adler32`] for Adler-32
+//! checksum computation.
 
 use alloc::borrow::Cow;
 use alloc::format;

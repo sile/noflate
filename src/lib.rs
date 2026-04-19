@@ -5,13 +5,12 @@
 //! A zero-dependency DEFLATE (RFC 1951), gzip (RFC 1952), and zlib
 //! (RFC 1950) encoder and decoder.
 //!
-//! # Design
-//!
-//! This crate follows a *sans-io* design: the library performs no I/O
-//! itself. Callers drive encoding and decoding by feeding bytes in
-//! (`feed`) and consuming bytes out (`output` / `advance`). This makes
-//! the library usable with any I/O strategy — synchronous, async, or
-//! embedded — without runtime dependencies.
+//! - `no_std` (requires only `alloc`)
+//! - No `unsafe` code
+//! - Sans-io: callers drive encoding and decoding via `feed` / `output` /
+//!   `advance`, with no I/O performed by the library itself
+//! - WebSocket `permessage-deflate` (RFC 7692) support via
+//!   [`deflate::Encoder::sync_flush`] and [`deflate::Encoder::reset_history`]
 //!
 //! # Examples
 //!
@@ -24,6 +23,21 @@
 //! assert_eq!(decompressed, input);
 //! ```
 //!
+//! Streaming encoder:
+//!
+//! ```
+//! let mut encoder = noflate::deflate::Encoder::new();
+//! encoder.feed(b"Hello, ").unwrap();
+//! encoder.feed(b"world!").unwrap();
+//! encoder.finish().unwrap();
+//! let compressed = encoder.output().to_vec();
+//! encoder.advance(compressed.len());
+//! assert_eq!(
+//!     noflate::deflate::decompress(&compressed).unwrap(),
+//!     b"Hello, world!",
+//! );
+//! ```
+//!
 //! Streaming decoder:
 //!
 //! ```
@@ -34,6 +48,18 @@
 //! decoder.advance(out.len());
 //! assert!(decoder.is_finished());
 //! assert_eq!(out, b"hello");
+//! ```
+//!
+//! The [`gzip`] and [`zlib`] modules provide the same API shape for their
+//! respective container formats.
+//!
+//! [`Format::detect`] identifies the format of a compressed stream:
+//!
+//! ```
+//! use noflate::Format;
+//!
+//! let data = noflate::gzip::compress(b"hello").unwrap();
+//! assert_eq!(Format::detect(&data), Some(Format::Gzip));
 //! ```
 
 extern crate alloc;

@@ -1,5 +1,14 @@
-//! GZIP container (RFC 1952) wrapping a raw DEFLATE stream with a 10-byte
-//! (or longer) header and an 8-byte trailer (CRC-32 + original size).
+//! GZIP (RFC 1952) encoder and decoder.
+//!
+//! ```
+//! let compressed = noflate::gzip::compress(b"hello").unwrap();
+//! assert_eq!(noflate::gzip::decompress(&compressed).unwrap(), b"hello");
+//! ```
+//!
+//! See [`Encoder`] and [`Decoder`] for the streaming API.
+//!
+//! This module also provides [`Crc32`] and [`crc32`] for CRC-32 checksum
+//! computation.
 
 use alloc::borrow::Cow;
 use alloc::format;

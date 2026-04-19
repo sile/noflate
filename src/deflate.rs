@@ -1,4 +1,11 @@
 //! Raw DEFLATE (RFC 1951) encoder and decoder.
+//!
+//! ```
+//! let compressed = noflate::deflate::compress(b"hello").unwrap();
+//! assert_eq!(noflate::deflate::decompress(&compressed).unwrap(), b"hello");
+//! ```
+//!
+//! See [`Encoder`] and [`Decoder`] for the streaming API.
 
 use alloc::vec::Vec;
 
