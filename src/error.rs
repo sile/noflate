@@ -5,9 +5,9 @@ use alloc::borrow::Cow;
 /// Errors returned by the encoder and decoder.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum Error {
-    /// The input violates the DEFLATE specification.
+    /// The input is malformed or violates the expected format.
     InvalidData(Cow<'static, str>),
-    /// The input uses a DEFLATE feature that this library does not support.
+    /// The input uses a feature that this library does not support.
     Unsupported(Cow<'static, str>),
 }
 

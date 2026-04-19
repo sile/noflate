@@ -6,7 +6,7 @@
 //!
 //! # Design
 //!
-//! **noflate** follows a *sans-io* design: the library performs no I/O
+//! This crate follows a *sans-io* design: the library performs no I/O
 //! itself. Callers drive encoding and decoding by feeding bytes in
 //! (`feed`) and consuming bytes out (`output` / `advance`). This makes
 //! the library usable with any I/O strategy — synchronous, async, or
