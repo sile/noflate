@@ -185,9 +185,34 @@ impl Encoder {
     ///
     /// The stream remains continuable: subsequent [`Encoder::feed`] calls
     /// append further blocks, and [`Encoder::finish`] still emits the
-    /// final block. Intended for protocols that frame messages over a
-    /// single DEFLATE stream, such as WebSocket `permessage-deflate`
-    /// (RFC 7692). Returns an error if called after [`Encoder::finish`].
+    /// final block.
+    ///
+    /// This method leaves the 4-byte trailer in [`Encoder::output`]. For
+    /// WebSocket `permessage-deflate` (RFC 7692), callers typically send the
+    /// output *without* that trailer and append it back before decoding:
+    ///
+    /// ```rust
+    /// let mut enc = noflate::deflate::Encoder::new();
+    /// enc.feed(b"hello")?;
+    /// enc.sync_flush()?;
+    ///
+    /// let mut frame = enc.output().to_vec();
+    /// enc.advance(frame.len());
+    /// assert!(frame.ends_with(&[0x00, 0x00, 0xFF, 0xFF]));
+    /// frame.truncate(frame.len() - 4); // strip per RFC 7692
+    ///
+    /// let mut dec = noflate::deflate::Decoder::new();
+    /// dec.feed(&frame)?;
+    /// dec.feed(&[0x00, 0x00, 0xFF, 0xFF])?;
+    /// let out = dec.output().to_vec();
+    /// dec.advance(out.len());
+    /// assert_eq!(out, b"hello");
+    /// # Ok::<(), noflate::Error>(())
+    /// ```
+    ///
+    /// Intended for protocols that frame messages over a single DEFLATE
+    /// stream, such as WebSocket `permessage-deflate` (RFC 7692). Returns an
+    /// error if called after [`Encoder::finish`].
     pub fn sync_flush(&mut self) -> Result<()> {
         if self.finishing {
             return Err(crate::error::Error::InvalidData(
