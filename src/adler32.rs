@@ -21,8 +21,7 @@ impl Default for Adler32 {
 }
 
 impl Adler32 {
-    /// Create a new Adler-32 accumulator, initialised with the RFC 1950
-    /// starting value of 1.
+    /// Create a new Adler-32 accumulator with the RFC 1950 initial state.
     pub fn new() -> Self {
         Self { a: 1, b: 0 }
     }

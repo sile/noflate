@@ -178,7 +178,7 @@ impl Decoder {
         Ok(())
     }
 
-    /// Borrow decompressed bytes not yet advanced.
+    /// Borrow decompressed bytes not yet consumed.
     pub fn output(&self) -> &[u8] {
         self.output.get()
     }
@@ -302,7 +302,7 @@ impl Encoder {
         Self::with_options(EncodeOptions::new())
     }
 
-    /// Create a gzip encoder with custom DEFLATE options.
+    /// Create a gzip encoder with custom options.
     pub fn with_options(options: EncodeOptions) -> Self {
         Self {
             deflate: DeflateEncoder::with_options(options),
@@ -334,7 +334,8 @@ impl Encoder {
         Ok(())
     }
 
-    /// Emit the final deflate block and the gzip trailer.
+    /// Emit the final block and the gzip trailer. Subsequent calls are
+    /// a no-op.
     pub fn finish(&mut self) -> Result<()> {
         if self.finishing {
             return Ok(());
@@ -360,7 +361,9 @@ impl Encoder {
     pub fn advance(&mut self, n: usize) {
         assert!(
             n <= self.output.len() - self.drained,
-            "advance past end of output"
+            "advance past end of output: n={}, available={}",
+            n,
+            self.output.len() - self.drained,
         );
         self.drained += n;
     }

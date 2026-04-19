@@ -118,12 +118,12 @@ impl Default for Encoder {
 }
 
 impl Encoder {
-    /// Create an encoder with default options (dynamic Huffman blocks).
+    /// Create a DEFLATE encoder with default options.
     pub fn new() -> Self {
         Self::with_options(EncodeOptions::new())
     }
 
-    /// Create an encoder with custom options.
+    /// Create a DEFLATE encoder with custom options.
     pub fn with_options(options: EncodeOptions) -> Self {
         Self {
             options,
@@ -138,18 +138,18 @@ impl Encoder {
         }
     }
 
-    /// Append uncompressed bytes to the pending input buffer.
+    /// Append uncompressed bytes.
     ///
     /// When the buffered input reaches the configured block size (default
     /// 64 KiB), a non-final DEFLATE block is emitted automatically.
-    /// Calling `feed` after [`Encoder::finish`] returns an error.
-    pub fn feed(&mut self, uncompressed: &[u8]) -> Result<()> {
+    /// Calling `feed` after `finish` returns an error.
+    pub fn feed(&mut self, data: &[u8]) -> Result<()> {
         if self.finishing {
             return Err(crate::error::Error::InvalidData(
                 "bytes fed after encoder finish".into(),
             ));
         }
-        self.input.extend_from_slice(uncompressed);
+        self.input.extend_from_slice(data);
         if let Some(limit) = self.options.max_block_input_bytes {
             while self.input.len() >= limit {
                 let tail = self.input.split_off(limit);
@@ -160,8 +160,7 @@ impl Encoder {
         Ok(())
     }
 
-    /// Emit the final DEFLATE block. Subsequent calls to `finish` are a
-    /// no-op.
+    /// Emit the final block. Subsequent calls are a no-op.
     pub fn finish(&mut self) -> Result<()> {
         if self.finishing {
             return Ok(());
@@ -206,8 +205,7 @@ impl Encoder {
         self.matcher = MatchFinder::new();
     }
 
-    /// Borrow bytes of compressed output not yet consumed via
-    /// [`Encoder::advance`].
+    /// Borrow encoded bytes not yet consumed.
     pub fn output(&self) -> &[u8] {
         &self.output[self.drained..]
     }
@@ -223,8 +221,7 @@ impl Encoder {
         self.drained += n;
     }
 
-    /// `true` once [`Encoder::finish`] has been called and all emitted
-    /// output bytes have been consumed via [`Encoder::advance`].
+    /// `true` once `finish` has been called and all output consumed.
     pub fn is_finished(&self) -> bool {
         self.finishing && self.drained == self.output.len()
     }

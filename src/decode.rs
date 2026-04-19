@@ -78,7 +78,7 @@ impl Default for Decoder {
 }
 
 impl Decoder {
-    /// Create a new decoder positioned at the start of a DEFLATE stream.
+    /// Create a DEFLATE decoder positioned at the start of a stream.
     pub fn new() -> Self {
         Self {
             input: Buf::new(),
@@ -91,23 +91,22 @@ impl Decoder {
         }
     }
 
-    /// Append compressed bytes and advance the decoder as far as possible.
+    /// Append compressed bytes.
     ///
     /// Returns an error only for genuine stream errors. Running out of
     /// input is not an error: the call returns `Ok(())` and the decoder
     /// waits for more bytes.
-    pub fn feed(&mut self, compressed: &[u8]) -> Result<()> {
-        if self.finished && !compressed.is_empty() {
+    pub fn feed(&mut self, data: &[u8]) -> Result<()> {
+        if self.finished && !data.is_empty() {
             return Err(Error::InvalidData(
                 "bytes fed after deflate stream end".into(),
             ));
         }
-        self.input.feed(compressed);
+        self.input.feed(data);
         self.drive()
     }
 
-    /// Borrow decompressed bytes that have been produced but not yet
-    /// consumed via [`Decoder::advance`].
+    /// Borrow decompressed bytes not yet consumed.
     pub fn output(&self) -> &[u8] {
         &self.output[self.drained..]
     }

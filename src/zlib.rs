@@ -18,8 +18,7 @@ const CMF: u8 = 0x78;
 /// `0x78 * 256 + 0x9C = 30876 = 31 * 996`.
 const FLG: u8 = 0x9C;
 
-/// Streaming zlib decoder: strip the 2-byte header, run DEFLATE, then
-/// verify the 4-byte Adler-32 trailer.
+/// Streaming zlib decoder.
 #[derive(Debug)]
 pub struct Decoder {
     state: State,
@@ -119,7 +118,7 @@ impl Decoder {
         Ok(())
     }
 
-    /// Borrow decompressed bytes that have not yet been advanced.
+    /// Borrow decompressed bytes not yet consumed.
     pub fn output(&self) -> &[u8] {
         self.output.get()
     }
@@ -220,12 +219,12 @@ impl Default for Encoder {
 }
 
 impl Encoder {
-    /// Create a zlib encoder with default (dynamic Huffman) options.
+    /// Create a zlib encoder with default options.
     pub fn new() -> Self {
         Self::with_options(EncodeOptions::new())
     }
 
-    /// Create a zlib encoder with custom DEFLATE options.
+    /// Create a zlib encoder with custom options.
     pub fn with_options(options: EncodeOptions) -> Self {
         Self {
             deflate: DeflateEncoder::with_options(options),
@@ -259,7 +258,8 @@ impl Encoder {
         Ok(())
     }
 
-    /// Emit the final deflate block, then the Adler-32 trailer.
+    /// Emit the final block and the Adler-32 trailer. Subsequent calls
+    /// are a no-op.
     pub fn finish(&mut self) -> Result<()> {
         if self.finishing {
             return Ok(());
@@ -288,7 +288,9 @@ impl Encoder {
     pub fn advance(&mut self, n: usize) {
         assert!(
             n <= self.output.len() - self.drained,
-            "advance past end of output"
+            "advance past end of output: n={}, available={}",
+            n,
+            self.output.len() - self.drained,
         );
         self.drained += n;
     }

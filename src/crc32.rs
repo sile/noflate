@@ -48,7 +48,7 @@ const fn make_table() -> [[u32; 256]; SLICE] {
     table
 }
 
-/// Streaming CRC-32 accumulator.
+/// Streaming CRC-32 checksum.
 #[derive(Debug, Clone)]
 pub struct Crc32 {
     // Stored *inverted* (initial 0xFFFFFFFF) so the inner loop does not
@@ -63,7 +63,7 @@ impl Default for Crc32 {
 }
 
 impl Crc32 {
-    /// New accumulator with the RFC 1952 initial state.
+    /// Create a new CRC-32 accumulator with the RFC 1952 initial state.
     pub fn new() -> Self {
         Self { state: 0xFFFF_FFFF }
     }
