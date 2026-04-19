@@ -117,18 +117,19 @@ BENCH_REPEATS=30 cargo run --release --example bench_wrappers
 
 The numbers below are **rough indicators only** — throughput fluctuates substantially with hardware, runner load, workload size, and specific input. Depending on the environment, noflate can be faster or slower than `flate2` on the same operation. Re-run the [`Benchmark`](.github/workflows/benchmark.yml) workflow (Actions → Benchmark → Run workflow) or run the examples locally before making performance-sensitive decisions.
 
+- Commit: [`8da4e92`](https://github.com/sile/noflate/commit/8da4e92ee99b2a37596b2877ad98e58dcc486593) (median of 5 workflow runs)
 - Source: GitHub Actions, standard runners
   - `ubuntu-latest`: AMD EPYC 7763 (2 vCPU, x86_64, Azure)
   - `macos-latest`: Apple M1 Virtual (3 vCPU, arm64)
-- Toolchain: `rustc 1.94.1`, `--release`
+- Toolchain: `rustc 1.95.0`, `--release`
 - Methodology: `BENCH_REPEATS=30`, best-of reported; encode throughput is of the raw input stream, decode throughput is of the decompressed output stream
 
 **DEFLATE, 1 MiB English text** (MB/s):
 
 |        | noflate (ubuntu) | flate2 (ubuntu) | noflate (macos) | flate2 (macos) |
 |--------|-----------------:|----------------:|----------------:|---------------:|
-| encode |              427 |             363 |             645 |           1067 |
-| decode |             6564 |            3166 |            7111 |           3617 |
+| encode |              434 |             363 |             625 |           1034 |
+| decode |             6727 |            3498 |            5866 |           3172 |
 
 **Encode compression ratio** (`compressed / original` — deterministic, identical across runners):
 
@@ -146,8 +147,8 @@ Noflate's ratio is within ~0.1 % of `flate2` across the board — slightly bette
 
 |          | noflate (ubuntu) | reference (ubuntu)     | noflate (macos) | reference (macos)    |
 |----------|-----------------:|-----------------------:|----------------:|---------------------:|
-| CRC-32   |             2259 |   12178 (`crc32fast`)  |            3275 |   8545 (`crc32fast`) |
-| Adler-32 |             3037 |      3020 (`adler32`)  |            2965 |     2858 (`adler32`) |
+| CRC-32   |             2257 |   11501 (`crc32fast`)  |            3045 |   7969 (`crc32fast`) |
+| Adler-32 |             3038 |      3013 (`adler32`)  |            2765 |     2665 (`adler32`) |
 
 Notes on these numbers:
 
