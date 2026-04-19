@@ -532,7 +532,7 @@ mod tests {
     #[test]
     fn advance_compacts_output_buffer() {
         // Regression for https://github.com/sile/noflate/issues/1.
-        use super::{Encoder, EncodeOptions};
+        use super::{EncodeOptions, Encoder};
         let mut e = Encoder::with_options(EncodeOptions::new().stored());
         let chunk = vec![b'x'; 64 * 1024];
         let mut total = 0usize;

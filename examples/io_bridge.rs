@@ -98,7 +98,9 @@ impl<R: Read> Read for DeflateReader<R> {
                 self.eof = true;
                 continue;
             }
-            self.decoder.feed(&self.buf[..n]).map_err(io::Error::other)?;
+            self.decoder
+                .feed(&self.buf[..n])
+                .map_err(io::Error::other)?;
         }
     }
 }
