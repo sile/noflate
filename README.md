@@ -6,17 +6,12 @@ noflate
 [![Actions Status](https://github.com/sile/noflate/workflows/CI/badge.svg)](https://github.com/sile/noflate/actions)
 ![License](https://img.shields.io/crates/l/noflate)
 
-A `no_std` sans-io DEFLATE / ZLIB / GZIP encoder and decoder with no dependencies.
+A zero-dependency DEFLATE (RFC 1951), gzip (RFC 1952), and zlib (RFC 1950) encoder and decoder.
 
-Features
---------
-
-- No dependencies; pure, portable, safe Rust (`#![forbid(unsafe_code)]`)
-- `no_std` compatible by default (requires `alloc`; no feature flag needed)
-- Sans-I/O streaming API — the library owns its buffers; the caller feeds bytes in and pulls bytes out. No `std::io::Read` / `std::io::Write` coupling, no implicit I/O.
-- DEFLATE (RFC 1951): encoder and decoder, all three block kinds (stored / fixed Huffman / dynamic Huffman)
-- ZLIB (RFC 1950) wrapper with Adler-32 verification
-- GZIP (RFC 1952) wrapper with CRC-32 + ISIZE verification
+- `no_std` (requires only `alloc`)
+- No `unsafe` code (`#![forbid(unsafe_code)]`)
+- Sans-io: the library performs no I/O itself — callers feed bytes in and consume bytes out, making it usable with any I/O strategy
+- WebSocket permessage-deflate ([RFC 7692](https://www.rfc-editor.org/rfc/rfc7692)) support
 
 Examples
 --------
@@ -25,33 +20,44 @@ Examples
 
 ```rust
 let input = b"Hello, DEFLATE!";
-let compressed = noflate::compress(input).unwrap();
-let decompressed = noflate::decompress(&compressed).unwrap();
+let compressed = noflate::deflate::compress(input)?;
+let decompressed = noflate::deflate::decompress(&compressed)?;
 assert_eq!(decompressed, input);
+```
+
+### Streaming encoder
+
+```rust
+let mut encoder = noflate::deflate::Encoder::new();
+encoder.feed(b"Hello, ")?;
+encoder.feed(b"world!")?;
+encoder.finish()?;
+let compressed = encoder.output().to_vec();
+encoder.advance(compressed.len());
+assert_eq!(noflate::deflate::decompress(&compressed)?, b"Hello, world!");
 ```
 
 ### Streaming decoder
 
 ```rust
-let compressed = noflate::compress(b"hello").unwrap();
+let compressed = noflate::deflate::compress(b"hello")?;
 
-let mut decoder = noflate::Decoder::new();
-decoder.feed(&compressed).unwrap();
-assert!(decoder.is_finished());
-
+let mut decoder = noflate::deflate::Decoder::new();
+decoder.feed(&compressed)?;
 let out = decoder.output().to_vec();
 decoder.advance(out.len());
+assert!(decoder.is_finished());
 assert_eq!(out, b"hello");
 ```
 
-### zlib / gzip
+### gzip / zlib
 
 ```rust
-let gz = noflate::gzip::compress(b"hello world").unwrap();
-assert_eq!(noflate::gzip::decompress(&gz).unwrap(), b"hello world");
+let gz = noflate::gzip::compress(b"hello world")?;
+assert_eq!(noflate::gzip::decompress(&gz)?, b"hello world");
 
-let zl = noflate::zlib::compress(b"hello world").unwrap();
-assert_eq!(noflate::zlib::decompress(&zl).unwrap(), b"hello world");
+let zl = noflate::zlib::compress(b"hello world")?;
+assert_eq!(noflate::zlib::decompress(&zl)?, b"hello world");
 ```
 
 ### WebSocket permessage-deflate (RFC 7692)
@@ -65,9 +71,9 @@ back-references into the previous one — the requirement behind
 
 ```rust
 // Sender (per RFC 7692 §7.2.1).
-let mut encoder = noflate::Encoder::new();
-encoder.feed(b"hello").unwrap();
-encoder.sync_flush().unwrap();
+let mut encoder = noflate::deflate::Encoder::new();
+encoder.feed(b"hello")?;
+encoder.sync_flush()?;
 let mut frame = encoder.output().to_vec();
 encoder.advance(frame.len());
 assert!(frame.ends_with(&[0x00, 0x00, 0xFF, 0xFF]));
@@ -76,9 +82,9 @@ frame.truncate(frame.len() - 4);       // strip the trailer per RFC
 encoder.reset_history();               // only if no_context_takeover
 
 // Receiver (per RFC 7692 §7.2.2): append the stripped trailer back.
-let mut decoder = noflate::Decoder::new();
-decoder.feed(&frame).unwrap();
-decoder.feed(&[0x00, 0x00, 0xFF, 0xFF]).unwrap();
+let mut decoder = noflate::deflate::Decoder::new();
+decoder.feed(&frame)?;
+decoder.feed(&[0x00, 0x00, 0xFF, 0xFF])?;
 let message = decoder.output().to_vec();
 decoder.advance(message.len());
 assert_eq!(message, b"hello");
