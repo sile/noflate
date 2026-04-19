@@ -7,6 +7,16 @@ use crate::error::{Error, Result};
 pub use crate::decode::Decoder;
 pub use crate::encode::{EncodeOptions, Encoder};
 
+/// One-shot: compress a slice into a new DEFLATE stream.
+pub fn compress(data: &[u8]) -> Result<Vec<u8>> {
+    let mut encoder = Encoder::with_options(EncodeOptions::new().buffer_all_input());
+    encoder.feed(data)?;
+    encoder.finish()?;
+    let out = encoder.output().to_vec();
+    encoder.advance(out.len());
+    Ok(out)
+}
+
 /// One-shot: decompress a DEFLATE stream into a new `Vec<u8>`.
 ///
 /// Returns an error if the input is not a valid DEFLATE stream or ends
@@ -21,15 +31,5 @@ pub fn decompress(data: &[u8]) -> Result<Vec<u8>> {
     }
     let out = decoder.output().to_vec();
     decoder.advance(out.len());
-    Ok(out)
-}
-
-/// One-shot: compress a slice into a new DEFLATE stream.
-pub fn compress(data: &[u8]) -> Result<Vec<u8>> {
-    let mut encoder = Encoder::with_options(EncodeOptions::new().buffer_all_input());
-    encoder.feed(data)?;
-    encoder.finish()?;
-    let out = encoder.output().to_vec();
-    encoder.advance(out.len());
     Ok(out)
 }

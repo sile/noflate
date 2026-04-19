@@ -112,7 +112,7 @@ impl Crc32 {
     }
 }
 
-/// One-shot convenience: compute CRC-32 of a full byte slice.
+/// One-shot: compute CRC-32 of a byte slice.
 pub fn crc32(data: &[u8]) -> u32 {
     let mut c = Crc32::new();
     c.update(data);

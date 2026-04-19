@@ -128,9 +128,10 @@ impl Decoder {
         self.finished
     }
 
-    /// Bytes fed to [`Decoder::feed`] that the DEFLATE state machine did
-    /// not consume. Useful for the zlib/gzip wrappers which need to keep
-    /// the trailer bytes after the DEFLATE stream ends.
+    /// Bytes fed to `feed` that the decoder did not consume.
+    ///
+    /// Non-empty after the final block when the input contained trailing
+    /// bytes (e.g. a container trailer).
     pub fn remaining_input(&self) -> &[u8] {
         self.input.get()
     }

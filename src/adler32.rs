@@ -63,7 +63,7 @@ impl Adler32 {
     }
 }
 
-/// One-shot convenience: compute Adler-32 of a full byte slice.
+/// One-shot: compute Adler-32 of a byte slice.
 pub fn adler32(data: &[u8]) -> u32 {
     let mut a = Adler32::new();
     a.update(data);

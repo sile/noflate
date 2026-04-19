@@ -1,4 +1,4 @@
-//! Error and `Result` types for DEFLATE encoding and decoding.
+//! Error and `Result` types shared by all encoders and decoders.
 
 use alloc::borrow::Cow;
 
