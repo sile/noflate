@@ -132,3 +132,9 @@ match noflate::Format::detect(&data) {
   after `sync_flush()`.
 - `EncodeOptions` belongs to `noflate::deflate`, but the same options are used
   by `gzip::Encoder` and `zlib::Encoder`.
+- The crate performs no I/O itself, but the sans-io API plugs into
+  `std::io::Write` / `Read` with a small adapter: `Write::write` forwards
+  to `feed` and drains `output` into the inner sink; `Read::read` pulls
+  from `output` and tops up via `feed` from the inner source. See
+  `examples/io_bridge.rs` for a runnable `DeflateWriter` / `DeflateReader`
+  pair.

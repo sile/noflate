@@ -94,6 +94,16 @@ The decoder needs no explicit reset: the sender guarantees no
 back-reference crosses a message boundary under `*_no_context_takeover`,
 so subsequent frames can be fed into the same `Decoder` instance.
 
+### `std::io::{Read, Write}` interop
+
+noflate performs no I/O itself, but the sans-io API plugs into
+`std::io::Write` and `std::io::Read` with a small adapter — `Write::write`
+forwards to `feed` and drains `output` into the inner sink, and
+`Read::read` pulls from `output` and tops up the decoder via `feed` from
+the inner source. See [`examples/io_bridge.rs`](examples/io_bridge.rs)
+for a runnable `DeflateWriter` / `DeflateReader` pair; the same pattern
+works verbatim for `gzip` and `zlib`.
+
 Benchmarks
 ----------
 

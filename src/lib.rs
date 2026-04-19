@@ -62,6 +62,14 @@
 //! The [`gzip`] and [`zlib`] modules provide the same API shape for their
 //! respective container formats.
 //!
+//! The crate performs no I/O itself, but the sans-io API plugs into
+//! `std::io::Write` and `std::io::Read` with a small adapter: drain
+//! [`deflate::Encoder::output`] into any `Write` sink, and top up
+//! [`deflate::Decoder::feed`] from any `Read` source. See
+//! `examples/io_bridge.rs` in the repository for a runnable
+//! `DeflateWriter` / `DeflateReader` pair; the same pattern works
+//! verbatim for the [`gzip`] and [`zlib`] streaming types.
+//!
 //! [`Format::detect`] identifies the format of a compressed stream:
 //!
 //! ```
