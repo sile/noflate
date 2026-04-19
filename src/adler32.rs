@@ -57,7 +57,7 @@ impl Adler32 {
         self.b = b;
     }
 
-    /// Finalise and return the 32-bit Adler-32 value
+    /// Return the current 32-bit Adler-32 value
     /// `(b << 16) | a` in RFC 1950 byte order.
     pub fn value(&self) -> u32 {
         (self.b << 16) | self.a

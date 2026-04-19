@@ -106,7 +106,7 @@ impl Crc32 {
         self.state = crc;
     }
 
-    /// Finalise and return the 32-bit CRC-32 value.
+    /// Return the current 32-bit CRC-32 value.
     pub fn value(&self) -> u32 {
         !self.state
     }

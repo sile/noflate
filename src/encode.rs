@@ -50,7 +50,7 @@ impl EncodeOptions {
         }
     }
 
-    /// Use a single fixed-Huffman block instead of dynamic.
+    /// Use fixed-Huffman blocks instead of dynamic.
     #[must_use]
     pub fn fixed_huffman(mut self) -> Self {
         self.block_kind = BlockKind::Fixed;
