@@ -32,6 +32,12 @@ const FEXTRA: u8 = 1 << 2;
 const FNAME: u8 = 1 << 3;
 const FCOMMENT: u8 = 1 << 4;
 
+/// Compact the encoder output buffer once the consumed prefix exceeds this size.
+///
+/// See `encode::COMPACT_THRESHOLD` for the cost model — one `Vec::drain`
+/// per `COMPACT_THRESHOLD` bytes consumed, zero cost under the threshold.
+const COMPACT_THRESHOLD: usize = 1024 * 1024;
+
 /// Streaming gzip decoder.
 #[derive(Debug)]
 pub struct Decoder {
@@ -378,6 +384,10 @@ impl Encoder {
             self.output.len() - self.drained,
         );
         self.drained += n;
+        if self.drained >= COMPACT_THRESHOLD {
+            self.output.drain(..self.drained);
+            self.drained = 0;
+        }
     }
 
     /// `true` once `finish` has been called and all output consumed.
@@ -422,6 +432,7 @@ pub fn decompress(data: &[u8]) -> Result<Vec<u8>> {
 
 #[cfg(test)]
 mod tests {
+    use alloc::vec;
     use alloc::vec::Vec;
 
     use super::{Decoder, compress, decompress};
@@ -517,4 +528,31 @@ mod tests {
     }
 
     use super::{MAGIC1, MAGIC2};
+
+    #[test]
+    fn advance_compacts_output_buffer() {
+        // Regression for https://github.com/sile/noflate/issues/1.
+        use super::{Encoder, EncodeOptions};
+        let mut e = Encoder::with_options(EncodeOptions::new().stored());
+        let chunk = vec![b'x'; 64 * 1024];
+        let mut total = 0usize;
+        let mut max_internal = 0usize;
+        for _ in 0..160 {
+            e.feed(&chunk).unwrap();
+            let out = e.output().to_vec();
+            total += out.len();
+            e.advance(out.len());
+            max_internal = max_internal.max(e.output.len());
+        }
+        e.finish().unwrap();
+        let tail = e.output().to_vec();
+        total += tail.len();
+        e.advance(tail.len());
+        assert!(e.is_finished());
+        assert!(total > 10 * 1024 * 1024);
+        assert!(
+            max_internal < 2 * 1024 * 1024,
+            "internal output buffer grew to {max_internal} bytes"
+        );
+    }
 }

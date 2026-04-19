@@ -34,6 +34,14 @@ enum BlockKind {
 /// Default maximum input bytes per DEFLATE block for streaming encoders.
 const DEFAULT_MAX_BLOCK_INPUT: usize = 64 * 1024;
 
+/// Compact the output buffer once the consumed prefix exceeds this size.
+///
+/// The encoder output has no back-reference requirement, so we drain the
+/// consumed prefix entirely. Amortized cost is one `Vec::drain` per
+/// `COMPACT_THRESHOLD` bytes consumed; callers that never reach the
+/// threshold pay nothing.
+const COMPACT_THRESHOLD: usize = 1024 * 1024;
+
 /// Configurable parameters for the encoder.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct EncodeOptions {
@@ -219,6 +227,10 @@ impl Encoder {
             self.output.len() - self.drained,
         );
         self.drained += n;
+        if self.drained >= COMPACT_THRESHOLD {
+            self.output.drain(..self.drained);
+            self.drained = 0;
+        }
     }
 
     /// `true` once `finish` has been called and all output consumed.
@@ -669,5 +681,34 @@ mod tests {
         e.feed(b"data").unwrap();
         e.finish().unwrap();
         assert!(e.sync_flush().is_err());
+    }
+
+    #[test]
+    fn advance_compacts_output_buffer() {
+        // Regression for https://github.com/sile/noflate/issues/1: the
+        // encoder's output Vec must drop consumed bytes so memory does
+        // not grow without bound during large streaming encodes.
+        let mut e = Encoder::with_options(EncodeOptions::new().stored());
+        let chunk = vec![b'x'; 64 * 1024];
+        let mut total_consumed = 0usize;
+        let mut max_internal = 0usize;
+        // Drive ~10 MiB through the encoder, draining after each feed.
+        for _ in 0..160 {
+            e.feed(&chunk).unwrap();
+            let out = e.output().to_vec();
+            total_consumed += out.len();
+            e.advance(out.len());
+            max_internal = max_internal.max(e.output.len());
+        }
+        e.finish().unwrap();
+        let tail = e.output().to_vec();
+        total_consumed += tail.len();
+        e.advance(tail.len());
+        assert!(e.is_finished());
+        assert!(total_consumed > 10 * 1024 * 1024);
+        assert!(
+            max_internal < 2 * 1024 * 1024,
+            "internal output buffer grew to {max_internal} bytes"
+        );
     }
 }

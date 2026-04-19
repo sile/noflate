@@ -15,9 +15,17 @@ use crate::buf::Buf;
 use crate::error::{Error, Result};
 use crate::huffman::HuffmanDecoder;
 use crate::symbol::{
-    BITWIDTH_CODE_ORDER, DISTANCE_TABLE, END_OF_BLOCK, LENGTH_TABLE, fixed_distance_code_lengths,
-    fixed_literal_code_lengths,
+    BITWIDTH_CODE_ORDER, DISTANCE_TABLE, END_OF_BLOCK, LENGTH_TABLE, WINDOW_SIZE,
+    fixed_distance_code_lengths, fixed_literal_code_lengths,
 };
+
+/// Compact the output buffer once it exceeds this size.
+///
+/// Amortized cost is one `copy_within` of at most `WINDOW_SIZE` + unconsumed
+/// bytes per `COMPACT_THRESHOLD` bytes decoded — negligible compared to the
+/// decoding work itself. Smaller streams never hit the threshold, so the
+/// common case pays nothing.
+const COMPACT_THRESHOLD: usize = 1024 * 1024;
 
 /// Streaming DEFLATE decoder.
 #[derive(Debug)]
@@ -120,6 +128,27 @@ impl Decoder {
             self.output.len() - self.drained,
         );
         self.drained += n;
+        self.maybe_compact();
+    }
+
+    /// Drop consumed bytes from the front of the output buffer while
+    /// preserving the LZ77 sliding window required for back-references.
+    ///
+    /// `copy_from_distance` uses `output.len() - distance` (relative
+    /// indexing), so shrinking the front keeps all back-references valid
+    /// as long as the last [`WINDOW_SIZE`] bytes are retained.
+    fn maybe_compact(&mut self) {
+        if self.output.len() < COMPACT_THRESHOLD {
+            return;
+        }
+        let window_start = self.output.len().saturating_sub(WINDOW_SIZE);
+        let keep_from = self.drained.min(window_start);
+        if keep_from == 0 {
+            return;
+        }
+        self.output.copy_within(keep_from.., 0);
+        self.output.truncate(self.output.len() - keep_from);
+        self.drained -= keep_from;
     }
 
     /// `true` once the final block's EOB has been decoded. Additional
@@ -752,5 +781,79 @@ mod tests {
         let out = d.output().to_vec();
         d.advance(out.len());
         assert_eq!(out, b"Hello World!");
+    }
+
+    #[test]
+    fn advance_compacts_output_buffer() {
+        // Regression for https://github.com/sile/noflate/issues/1: the output
+        // buffer must not grow without bound when the caller streams the
+        // decoded bytes out via feed/output/advance. Compress ~10 MiB and
+        // decode it in chunks, draining after each chunk; the internal
+        // output buffer should stay capped near the compaction threshold
+        // plus the LZ77 window rather than holding all 10 MiB.
+        use crate::encode::{EncodeOptions, Encoder};
+
+        let payload: alloc::vec::Vec<u8> =
+            (0..10 * 1024 * 1024).map(|i| (i * 37 + 13) as u8).collect();
+        let mut e = Encoder::with_options(EncodeOptions::new().buffer_all_input());
+        e.feed(&payload).unwrap();
+        e.finish().unwrap();
+        let compressed = e.output().to_vec();
+
+        let mut d = Decoder::new();
+        let mut decoded = alloc::vec::Vec::with_capacity(payload.len());
+        let mut max_internal = 0usize;
+        for chunk in compressed.chunks(64 * 1024) {
+            d.feed(chunk).unwrap();
+            let produced = d.output().to_vec();
+            decoded.extend_from_slice(&produced);
+            d.advance(produced.len());
+            // Inspect the internal buffer length through the public
+            // surface: output() returns [drained..], so output.len() after
+            // advance is (total - drained). We use that as a proxy.
+            max_internal = max_internal.max(d.output.len());
+        }
+        assert!(d.is_finished());
+        assert_eq!(decoded, payload);
+        // Must stay well under the total decoded size (10 MiB).
+        assert!(
+            max_internal < 2 * 1024 * 1024,
+            "internal output buffer grew to {max_internal} bytes"
+        );
+    }
+
+    #[test]
+    fn back_reference_correct_across_compaction() {
+        // Build a stream whose back-references span the compaction boundary.
+        // The payload is a 3 MiB sequence followed by an exact copy of the
+        // last 16 KiB — that inner copy becomes a back-reference spanning
+        // data that will have been compacted away from the front.
+        use crate::encode::{EncodeOptions, Encoder};
+
+        let unit: alloc::vec::Vec<u8> = (0..16 * 1024).map(|i| (i * 31 + 7) as u8).collect();
+        let mut payload = alloc::vec::Vec::new();
+        for _ in 0..192 {
+            // 192 * 16 KiB = 3 MiB of varying data
+            payload.extend_from_slice(&unit);
+        }
+        // Final block that should LZ77-match the immediately-prior unit.
+        payload.extend_from_slice(&unit);
+
+        let mut e = Encoder::with_options(EncodeOptions::new().buffer_all_input());
+        e.feed(&payload).unwrap();
+        e.finish().unwrap();
+        let compressed = e.output().to_vec();
+
+        let mut d = Decoder::new();
+        let mut decoded = alloc::vec::Vec::with_capacity(payload.len());
+        // Drain in small chunks so compaction runs many times.
+        for chunk in compressed.chunks(32 * 1024) {
+            d.feed(chunk).unwrap();
+            let produced = d.output().to_vec();
+            decoded.extend_from_slice(&produced);
+            d.advance(produced.len());
+        }
+        assert!(d.is_finished());
+        assert_eq!(decoded, payload);
     }
 }
