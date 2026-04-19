@@ -1,4 +1,4 @@
-//! Internal ring-style buffer shared by the sans-io encoder and decoder.
+//! Internal ring-style buffer shared by the encoder and decoder.
 //!
 //! Based on `rtmp-rs`'s `Buf`: bytes are appended via [`Buf::feed`] or
 //! [`Buf::push`] / [`Buf::extend_from_slice`], exposed for borrowed reads via

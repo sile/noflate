@@ -20,7 +20,7 @@ const FEXTRA: u8 = 1 << 2;
 const FNAME: u8 = 1 << 3;
 const FCOMMENT: u8 = 1 << 4;
 
-/// Streaming sans-io gzip decoder.
+/// Streaming gzip decoder.
 #[derive(Debug)]
 pub struct Decoder {
     state: State,
@@ -278,7 +278,7 @@ impl Decoder {
     }
 }
 
-/// Streaming sans-io gzip encoder.
+/// Streaming gzip encoder.
 #[derive(Debug)]
 pub struct Encoder {
     deflate: DeflateEncoder,

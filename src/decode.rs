@@ -1,4 +1,4 @@
-//! Streaming sans-io DEFLATE decoder.
+//! Streaming DEFLATE decoder.
 //!
 //! The caller feeds compressed bytes via [`Decoder::feed`] and pulls
 //! decompressed bytes back out via [`Decoder::output`] + [`Decoder::advance`].
@@ -19,7 +19,7 @@ use crate::symbol::{
     fixed_literal_code_lengths,
 };
 
-/// Streaming sans-io DEFLATE decoder.
+/// Streaming DEFLATE decoder.
 #[derive(Debug)]
 pub struct Decoder {
     input: Buf,

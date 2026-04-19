@@ -1,4 +1,4 @@
-//! Streaming sans-io DEFLATE encoder.
+//! Streaming DEFLATE encoder.
 //!
 //! The caller feeds uncompressed bytes via [`Encoder::feed`], then calls
 //! [`Encoder::finish`] to emit the final block. Compressed bytes are
@@ -93,7 +93,7 @@ impl Default for EncodeOptions {
     }
 }
 
-/// Streaming sans-io DEFLATE encoder.
+/// Streaming DEFLATE encoder.
 ///
 /// By default the encoder emits a non-final DEFLATE block each time the
 /// buffered input reaches 64 KiB, keeping memory bounded for streaming

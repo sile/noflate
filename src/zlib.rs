@@ -18,8 +18,8 @@ const CMF: u8 = 0x78;
 /// `0x78 * 256 + 0x9C = 30876 = 31 * 996`.
 const FLG: u8 = 0x9C;
 
-/// Streaming sans-io zlib decoder: strip the 2-byte header, run DEFLATE,
-/// then verify the 4-byte Adler-32 trailer.
+/// Streaming zlib decoder: strip the 2-byte header, run DEFLATE, then
+/// verify the 4-byte Adler-32 trailer.
 #[derive(Debug)]
 pub struct Decoder {
     state: State,
@@ -202,7 +202,7 @@ fn validate_zlib_header(header: [u8; 2]) -> Result<()> {
     Ok(())
 }
 
-/// Streaming sans-io zlib encoder.
+/// Streaming zlib encoder.
 #[derive(Debug)]
 pub struct Encoder {
     deflate: DeflateEncoder,
