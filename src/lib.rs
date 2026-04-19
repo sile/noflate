@@ -55,8 +55,6 @@ mod lz77;
 mod symbol;
 pub mod zlib;
 
-pub use adler32::{Adler32, adler32};
-pub use crc32::{Crc32, crc32};
 pub use error::{Error, Result};
 
 /// The detected compression format of a byte stream.

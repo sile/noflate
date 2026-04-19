@@ -222,14 +222,14 @@ proptest! {
 
     #[test]
     fn adler32_matches_reference(input in bounded_bytes()) {
-        let ours = noflate::adler32(&input);
+        let ours = noflate::zlib::adler32(&input);
         let reference = adler32::adler32(&input[..]).unwrap();
         prop_assert_eq!(ours, reference);
     }
 
     #[test]
     fn crc32_matches_reference(input in bounded_bytes()) {
-        let ours = noflate::crc32(&input);
+        let ours = noflate::gzip::crc32(&input);
         let reference = crc32fast::hash(&input);
         prop_assert_eq!(ours, reference);
     }

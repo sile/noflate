@@ -5,7 +5,7 @@ use alloc::borrow::Cow;
 use alloc::format;
 use alloc::vec::Vec;
 
-use crate::adler32::Adler32;
+pub use crate::adler32::{Adler32, adler32};
 use crate::buf::Buf;
 use crate::decode::Decoder as DeflateDecoder;
 use crate::encode::{EncodeOptions, Encoder as DeflateEncoder};

@@ -24,7 +24,7 @@ fn bench_one(name: &'static str, bytes: usize, repeats: usize) {
     let mut crate_crc_best = u128::MAX;
 
     for _ in 0..repeats {
-        let (n, _) = time_checksum("noflate adler32", bytes, || noflate::adler32(&input));
+        let (n, _) = time_checksum("noflate adler32", bytes, || noflate::zlib::adler32(&input));
         noflate_adler_best = noflate_adler_best.min(n);
     }
     for _ in 0..repeats {
@@ -34,7 +34,7 @@ fn bench_one(name: &'static str, bytes: usize, repeats: usize) {
         crate_adler_best = crate_adler_best.min(n);
     }
     for _ in 0..repeats {
-        let (n, _) = time_checksum("noflate crc32", bytes, || noflate::crc32(&input));
+        let (n, _) = time_checksum("noflate crc32", bytes, || noflate::gzip::crc32(&input));
         noflate_crc_best = noflate_crc_best.min(n);
     }
     for _ in 0..repeats {

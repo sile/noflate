@@ -6,7 +6,7 @@ use alloc::format;
 use alloc::vec::Vec;
 
 use crate::buf::Buf;
-use crate::crc32::Crc32;
+pub use crate::crc32::{Crc32, crc32};
 use crate::decode::Decoder as DeflateDecoder;
 use crate::encode::{EncodeOptions, Encoder as DeflateEncoder};
 use crate::error::{Error, Result};
