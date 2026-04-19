@@ -88,9 +88,7 @@ impl Format {
 
         let cmf = data[0];
         let flg = data[1];
-        if (cmf & 0x0F) == 8
-            && (cmf >> 4) <= 7
-            && (u16::from(cmf) * 256 + u16::from(flg)) % 31 == 0
+        if (cmf & 0x0F) == 8 && (cmf >> 4) <= 7 && (u16::from(cmf) * 256 + u16::from(flg)) % 31 == 0
         {
             return Some(Format::Zlib);
         }
