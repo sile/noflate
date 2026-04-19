@@ -21,5 +21,3 @@ adler32 = "1"
 members = ["pbt"]
 exclude = ["fuzz"]
 
-[lints.rust]
-missing_docs = "warn"
