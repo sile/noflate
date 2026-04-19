@@ -476,7 +476,7 @@ mod tests {
     use alloc::vec::Vec;
 
     use super::{EncodeOptions, Encoder};
-    use crate::{Decoder, decompress};
+    use crate::deflate::{Decoder, decompress};
 
     fn compress_with(opts: EncodeOptions, input: &[u8]) -> Vec<u8> {
         let mut e = Encoder::with_options(opts);

@@ -38,11 +38,11 @@ fn time_once<F: FnOnce() -> Vec<u8>>(name: &'static str, _input_len: usize, f: F
 }
 
 fn noflate_compress(input: &[u8]) -> Vec<u8> {
-    noflate::compress(input).unwrap()
+    noflate::deflate::compress(input).unwrap()
 }
 
 fn noflate_decompress(input: &[u8]) -> Vec<u8> {
-    noflate::decompress(input).unwrap()
+    noflate::deflate::decompress(input).unwrap()
 }
 
 fn flate2_compress(input: &[u8]) -> Vec<u8> {

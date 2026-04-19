@@ -1,7 +1,7 @@
 //! Tests that streaming `feed`-in-chunks yields identical results to
 //! feeding the whole input at once.
 
-use noflate::{Decoder, Encoder, compress, decompress};
+use noflate::deflate::{Decoder, Encoder, compress, decompress};
 
 fn decode_byte_by_byte(compressed: &[u8]) -> Vec<u8> {
     let mut d = Decoder::new();

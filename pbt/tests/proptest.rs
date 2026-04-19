@@ -17,7 +17,7 @@ use std::io::{Read, Write};
 use flate2::Compression;
 use flate2::read::{DeflateDecoder, GzDecoder, ZlibDecoder};
 use flate2::write::{DeflateEncoder, GzEncoder, ZlibEncoder};
-use noflate::{EncodeOptions, Encoder};
+use noflate::deflate::{EncodeOptions, Encoder};
 use proptest::prelude::*;
 
 fn compress_with(opts: EncodeOptions, input: &[u8]) -> Vec<u8> {
@@ -69,7 +69,7 @@ fn flate2_gzip_decode(data: &[u8]) -> Vec<u8> {
 }
 
 fn chunked_decoder_output(compressed: &[u8], chunks: &[usize]) -> Vec<u8> {
-    let mut d = noflate::Decoder::new();
+    let mut d = noflate::deflate::Decoder::new();
     let mut collected = Vec::new();
     let mut offset = 0;
     for &chunk in chunks {
@@ -126,21 +126,21 @@ proptest! {
     #[test]
     fn deflate_dynamic_roundtrip(input in bounded_bytes()) {
         let compressed = compress_with(EncodeOptions::new(), &input);
-        let decompressed = noflate::decompress(&compressed).expect("decompress");
+        let decompressed = noflate::deflate::decompress(&compressed).expect("decompress");
         prop_assert_eq!(decompressed, input);
     }
 
     #[test]
     fn deflate_fixed_roundtrip(input in bounded_bytes()) {
         let compressed = compress_with(EncodeOptions::new().fixed_huffman(), &input);
-        let decompressed = noflate::decompress(&compressed).expect("decompress");
+        let decompressed = noflate::deflate::decompress(&compressed).expect("decompress");
         prop_assert_eq!(decompressed, input);
     }
 
     #[test]
     fn deflate_stored_roundtrip(input in bounded_bytes()) {
         let compressed = compress_with(EncodeOptions::new().stored(), &input);
-        let decompressed = noflate::decompress(&compressed).expect("decompress");
+        let decompressed = noflate::deflate::decompress(&compressed).expect("decompress");
         prop_assert_eq!(decompressed, input);
     }
 
@@ -163,7 +163,7 @@ proptest! {
         input in bounded_bytes(),
         chunks in chunk_sizes(),
     ) {
-        let compressed = noflate::compress(&input).expect("compress");
+        let compressed = noflate::deflate::compress(&input).expect("compress");
         let out = chunked_decoder_output(&compressed, &chunks);
         prop_assert_eq!(out, input);
     }
@@ -174,20 +174,20 @@ proptest! {
         chunks in chunk_sizes(),
     ) {
         let compressed = chunked_encoder_output(&input, &chunks);
-        let decompressed = noflate::decompress(&compressed).expect("decompress");
+        let decompressed = noflate::deflate::decompress(&compressed).expect("decompress");
         prop_assert_eq!(decompressed, input);
     }
 
     #[test]
     fn noflate_decompresses_flate2_deflate(input in bounded_bytes()) {
         let compressed = flate2_deflate(&input);
-        let decompressed = noflate::decompress(&compressed).expect("decompress");
+        let decompressed = noflate::deflate::decompress(&compressed).expect("decompress");
         prop_assert_eq!(decompressed, input);
     }
 
     #[test]
     fn flate2_decompresses_noflate_deflate(input in bounded_bytes()) {
-        let compressed = noflate::compress(&input).expect("compress");
+        let compressed = noflate::deflate::compress(&input).expect("compress");
         let decompressed = flate2_inflate(&compressed);
         prop_assert_eq!(decompressed, input);
     }

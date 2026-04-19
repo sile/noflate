@@ -1,7 +1,7 @@
 //! End-to-end `compress -> decompress` roundtrip tests covering all three
 //! DEFLATE block kinds across a variety of inputs.
 
-use noflate::{EncodeOptions, Encoder, decompress};
+use noflate::deflate::{EncodeOptions, Encoder, decompress};
 
 fn all_options() -> [EncodeOptions; 3] {
     [

@@ -1,6 +1,6 @@
 //! Negative tests for the decoder.
 
-use noflate::{Decoder, compress, decompress};
+use noflate::deflate::{Decoder, compress, decompress};
 
 #[test]
 fn reserved_block_type_errors() {
