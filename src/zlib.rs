@@ -1,8 +1,11 @@
 //! ZLIB (RFC 1950) encoder and decoder.
 //!
 //! ```
-//! let compressed = noflate::zlib::compress(b"hello").unwrap();
-//! assert_eq!(noflate::zlib::decompress(&compressed).unwrap(), b"hello");
+//! # fn main() -> noflate::Result<()> {
+//! let compressed = noflate::zlib::compress(b"hello")?;
+//! assert_eq!(noflate::zlib::decompress(&compressed)?, b"hello");
+//! # Ok(())
+//! # }
 //! ```
 //!
 //! See [`Encoder`] and [`Decoder`] for the streaming API.

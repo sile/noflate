@@ -1,8 +1,11 @@
 //! GZIP (RFC 1952) encoder and decoder.
 //!
 //! ```
-//! let compressed = noflate::gzip::compress(b"hello").unwrap();
-//! assert_eq!(noflate::gzip::decompress(&compressed).unwrap(), b"hello");
+//! # fn main() -> noflate::Result<()> {
+//! let compressed = noflate::gzip::compress(b"hello")?;
+//! assert_eq!(noflate::gzip::decompress(&compressed)?, b"hello");
+//! # Ok(())
+//! # }
 //! ```
 //!
 //! See [`Encoder`] and [`Decoder`] for the streaming API.

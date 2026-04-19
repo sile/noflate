@@ -17,37 +17,46 @@
 //! One-shot compression and decompression:
 //!
 //! ```
+//! # fn main() -> noflate::Result<()> {
 //! let input = b"Hello, DEFLATE!";
-//! let compressed = noflate::deflate::compress(input).unwrap();
-//! let decompressed = noflate::deflate::decompress(&compressed).unwrap();
+//! let compressed = noflate::deflate::compress(input)?;
+//! let decompressed = noflate::deflate::decompress(&compressed)?;
 //! assert_eq!(decompressed, input);
+//! # Ok(())
+//! # }
 //! ```
 //!
 //! Streaming encoder:
 //!
 //! ```
+//! # fn main() -> noflate::Result<()> {
 //! let mut encoder = noflate::deflate::Encoder::new();
-//! encoder.feed(b"Hello, ").unwrap();
-//! encoder.feed(b"world!").unwrap();
-//! encoder.finish().unwrap();
+//! encoder.feed(b"Hello, ")?;
+//! encoder.feed(b"world!")?;
+//! encoder.finish()?;
 //! let compressed = encoder.output().to_vec();
 //! encoder.advance(compressed.len());
 //! assert_eq!(
-//!     noflate::deflate::decompress(&compressed).unwrap(),
+//!     noflate::deflate::decompress(&compressed)?,
 //!     b"Hello, world!",
 //! );
+//! # Ok(())
+//! # }
 //! ```
 //!
 //! Streaming decoder:
 //!
 //! ```
-//! # let compressed = noflate::deflate::compress(b"hello").unwrap();
+//! # fn main() -> noflate::Result<()> {
+//! # let compressed = noflate::deflate::compress(b"hello")?;
 //! let mut decoder = noflate::deflate::Decoder::new();
-//! decoder.feed(&compressed).unwrap();
+//! decoder.feed(&compressed)?;
 //! let out = decoder.output().to_vec();
 //! decoder.advance(out.len());
 //! assert!(decoder.is_finished());
 //! assert_eq!(out, b"hello");
+//! # Ok(())
+//! # }
 //! ```
 //!
 //! The [`gzip`] and [`zlib`] modules provide the same API shape for their
@@ -56,10 +65,11 @@
 //! [`Format::detect`] identifies the format of a compressed stream:
 //!
 //! ```
-//! use noflate::Format;
-//!
-//! let data = noflate::gzip::compress(b"hello").unwrap();
-//! assert_eq!(Format::detect(&data), Some(Format::Gzip));
+//! # fn main() -> noflate::Result<()> {
+//! let data = noflate::gzip::compress(b"hello")?;
+//! assert_eq!(noflate::Format::detect(&data), Some(noflate::Format::Gzip));
+//! # Ok(())
+//! # }
 //! ```
 
 extern crate alloc;

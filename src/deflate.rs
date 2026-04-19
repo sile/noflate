@@ -1,8 +1,11 @@
 //! Raw DEFLATE (RFC 1951) encoder and decoder.
 //!
 //! ```
-//! let compressed = noflate::deflate::compress(b"hello").unwrap();
-//! assert_eq!(noflate::deflate::decompress(&compressed).unwrap(), b"hello");
+//! # fn main() -> noflate::Result<()> {
+//! let compressed = noflate::deflate::compress(b"hello")?;
+//! assert_eq!(noflate::deflate::decompress(&compressed)?, b"hello");
+//! # Ok(())
+//! # }
 //! ```
 //!
 //! See [`Encoder`] and [`Decoder`] for the streaming API.
