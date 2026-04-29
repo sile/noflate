@@ -89,19 +89,20 @@ BENCH_REPEATS=30 cargo run --release --example bench_wrappers
 
 The numbers below are **rough indicators only** — throughput fluctuates substantially with hardware, runner load, workload size, and specific input. Depending on the environment, noflate can be faster or slower than `flate2` on the same operation. Re-run the [`Benchmark`](.github/workflows/benchmark.yml) workflow (Actions → Benchmark → Run workflow) or run the examples locally before making performance-sensitive decisions.
 
-- Commit: [`8da4e92`](https://github.com/sile/noflate/commit/8da4e92ee99b2a37596b2877ad98e58dcc486593) (median of 5 workflow runs)
+- Commit: [`7ef5eec`](https://github.com/sile/noflate/commit/7ef5eec)
 - Source: GitHub Actions, standard runners
-  - `ubuntu-latest`: AMD EPYC 7763 (2 vCPU, x86_64, Azure)
+  - `ubuntu-latest`: AMD EPYC 7763 (Milan, Zen 3) or 9V74 (Genoa, Zen 4); rarely Intel Xeon Platinum 8370C (Ice Lake) — 4 vCPU x86_64 Azure VMs; the runner pool mixes SKUs
   - `macos-latest`: Apple M1 Virtual (3 vCPU, arm64)
 - Toolchain: `rustc 1.95.0`, `--release`
-- Methodology: `BENCH_REPEATS=30`, best-of reported; encode throughput is of the raw input stream, decode throughput is of the decompressed output stream
+- Methodology: `BENCH_REPEATS=30` per run (best-of reported); aggregated across 40 workflow runs by median within each CPU SKU (23× EPYC 7763, 15× EPYC 9V74, 40× M1; 2× Intel Xeon runs omitted — too few samples). Median rather than best-of across runs because runner load varies and best-of would cherry-pick lucky-fast instances. Encode throughput is of the raw input; decode throughput is of the decompressed output.
 
 **DEFLATE, 1 MiB English text** (MB/s):
 
-|        | noflate (ubuntu) | flate2 (ubuntu) | noflate (macos) | flate2 (macos) |
-|--------|-----------------:|----------------:|----------------:|---------------:|
-| encode |              434 |             363 |             625 |           1034 |
-| decode |             6727 |            3498 |            5866 |           3172 |
+| platform                    | noflate enc | flate2 enc | noflate dec | flate2 dec |
+|-----------------------------|------------:|-----------:|------------:|-----------:|
+| ubuntu — EPYC 7763 (Zen 3)  |         427 |        363 |        6652 |       3557 |
+| ubuntu — EPYC 9V74 (Zen 4)  |         390 |        498 |        7080 |       3485 |
+| macos — M1 (Virtual)        |         600 |        994 |        7395 |       2977 |
 
 **Encode compression ratio** (`compressed / original` — deterministic, identical across runners):
 
@@ -117,17 +118,18 @@ Noflate's ratio is within ~0.1 % of `flate2` across the board — slightly bette
 
 **Checksums of 1 MiB** (MB/s):
 
-|          | noflate (ubuntu) | reference (ubuntu)     | noflate (macos) | reference (macos)    |
-|----------|-----------------:|-----------------------:|----------------:|---------------------:|
-| CRC-32   |             2257 |   11501 (`crc32fast`)  |            3045 |   7969 (`crc32fast`) |
-| Adler-32 |             3038 |      3013 (`adler32`)  |            2765 |     2665 (`adler32`) |
+| platform                    | noflate CRC-32 | crc32fast | noflate Adler-32 | adler32 crate |
+|-----------------------------|---------------:|----------:|-----------------:|--------------:|
+| ubuntu — EPYC 7763 (Zen 3)  |           2256 |     12172 |             3037 |          3007 |
+| ubuntu — EPYC 9V74 (Zen 4)  |           2006 |     10800 |             2804 |          2705 |
+| macos — M1 (Virtual)        |           3045 |      7968 |             2763 |          2661 |
 
 Notes on these numbers:
 
-- The DEFLATE **decoder** is consistently faster than `flate2` on text — roughly 2× on both runners for the 1 MiB case. Random data also favours noflate. See the raw workflow logs for the full matrix.
-- The DEFLATE **encoder** is competitive with `flate2` on long text — faster on Ubuntu (~1.2×) but slower on macOS (~0.6×); per-call setup cost dominates near 1 KiB inputs (4–5× slower there).
-- **Adler-32** matches the `adler32` crate on both runners.
-- **CRC-32** is 2.5×–5× slower than `crc32fast`'s PCLMULQDQ path — the price of staying portable, safe (`#![forbid(unsafe_code)]`), and free of CPU-specific intrinsics.
+- The DEFLATE **decoder** is consistently faster than `flate2` on text — about 1.9× on EPYC 7763, 2.0× on EPYC 9V74, and 2.5× on macOS for the 1 MiB case. Random data also favours noflate. See the raw workflow logs for the full matrix.
+- The DEFLATE **encoder** picture is CPU-dependent: on EPYC 7763 noflate is ~1.2× faster than `flate2` on 1 MiB English text, but on the newer EPYC 9V74 (~0.8×) and on macOS M1 (~0.6×) it's slower — `flate2`'s 1 MiB encode benefits more from newer ISAs than noflate does. Per-call setup cost dominates near 1 KiB inputs (3–5× slower than `flate2` across all SKUs).
+- **Adler-32** matches the `adler32` crate on every runner (within ~5 %).
+- **CRC-32** is ~5× slower than `crc32fast`'s PCLMULQDQ path on x86_64 and ~2.6× slower on macOS M1 — the price of staying portable, safe (`#![forbid(unsafe_code)]`), and free of CPU-specific intrinsics.
 
 References
 ----------
