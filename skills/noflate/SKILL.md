@@ -9,9 +9,6 @@ description: >
   streaming compression with this crate.
 license: MIT
 compatibility: Requires Rust 1.88+ and cargo.
-metadata:
-  author: sile
-  version: "0.1.0"
 ---
 
 # noflate
