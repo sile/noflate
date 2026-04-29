@@ -1,9 +1,12 @@
 //! LZ77 match finder used by the encoder.
 //!
-//! [`MatchFinder`] owns the hash-chain tables (`head` + `prev`, 256 KiB
-//! combined) so they can be reused across multiple encode calls. Callers
-//! provide the `Vec<Lz77Code>` scratch buffer so the token allocation can
-//! also be reused across encode passes.
+//! [`MatchFinder`] owns the hash-chain tables (`head` + `prev`, up to
+//! 256 KiB combined) so they can be reused across multiple encode calls.
+//! The tables are allocated lazily on the first call that actually needs
+//! them, and `prev` grows only up to the input length (capped at
+//! `WINDOW_SIZE`) — short one-shot encodes don't pay for the full window.
+//! Callers provide the `Vec<Lz77Code>` scratch buffer so the token
+//! allocation can also be reused across encode passes.
 //!
 //! Adapted from `nopng::deflate::lz77_symbols`; the matching strategy is
 //! unchanged.
@@ -59,33 +62,37 @@ fn longest_common_prefix(input: &[u8], a: usize, b: usize, max: usize) -> usize 
 /// Hash-chain match finder with reusable internal tables.
 #[derive(Debug)]
 pub(crate) struct MatchFinder {
+    /// `HASH_SIZE` slots once allocated; empty before the first call
+    /// that needs hashing (input shorter than `MIN_MATCH` skips the
+    /// allocation entirely).
     head: Vec<u32>,
+    /// Up to `WINDOW_SIZE` slots; grown on demand to cover the longest
+    /// input seen so far so that short one-shot encodes don't pay for
+    /// the full 32 KiB window.
     prev: Vec<u32>,
-    /// Head table has been dirtied by a previous `symbols` call and
-    /// needs to be re-filled with `NIL` before the next run. False for a
-    /// freshly-constructed matcher (the Vec was allocated with NIL).
+    /// `head` has been dirtied by a previous `fill_symbols` call and
+    /// needs to be re-filled with `NIL` before the next run. False
+    /// while `head` is empty or freshly allocated.
     head_dirty: bool,
 }
 
 impl MatchFinder {
     pub(crate) fn new() -> Self {
         Self {
-            head: vec![NIL; HASH_SIZE],
-            prev: vec![NIL; WINDOW_SIZE],
+            head: Vec::new(),
+            prev: Vec::new(),
             head_dirty: false,
         }
     }
 
-    /// Produce LZ77 tokens for `input` into `symbols`. Previous contents
-    /// of the hash tables are reset lazily; `prev` does not need to be
-    /// reset because every entry is overwritten before being read (each
+    /// Produce LZ77 tokens for `input` into `symbols`. The hash tables
+    /// are allocated lazily on the first call with `input.len() >=
+    /// MIN_MATCH` and reused thereafter. `head` is reset only when
+    /// dirtied by a prior call; `prev` does not need to be reset
+    /// because every entry is overwritten before being read (each
     /// position writes `prev[pos & mask]` before later code walks the
     /// chain through that same index).
     pub(crate) fn fill_symbols(&mut self, input: &[u8], symbols: &mut Vec<Lz77Code>) {
-        if self.head_dirty {
-            self.head.iter_mut().for_each(|slot| *slot = NIL);
-        }
-        self.head_dirty = true;
         symbols.clear();
         symbols.reserve(input.len().saturating_sub(symbols.capacity()));
         if input.len() < MIN_MATCH {
@@ -93,6 +100,22 @@ impl MatchFinder {
                 symbols.push(Lz77Code::Literal(byte));
             }
             return;
+        }
+
+        if self.head.is_empty() {
+            self.head = vec![NIL; HASH_SIZE];
+        } else if self.head_dirty {
+            self.head.iter_mut().for_each(|slot| *slot = NIL);
+        }
+        self.head_dirty = true;
+
+        // `prev` is indexed by `pos & (WINDOW_SIZE - 1)`. For inputs
+        // shorter than `WINDOW_SIZE` the mask is a no-op, so we only
+        // need `input.len()` slots; for longer inputs we need the full
+        // window. Grow lazily to cover this call without ever shrinking.
+        let prev_needed = input.len().min(WINDOW_SIZE);
+        if self.prev.len() < prev_needed {
+            self.prev.resize(prev_needed, NIL);
         }
 
         let head = &mut self.head[..];
