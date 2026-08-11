@@ -12,9 +12,11 @@
 //!
 //! - **Stateful encoder command loop** — drives the encoder through a
 //!   random sequence of `feed` / `sync_flush` / `reset_history` /
-//!   `finish` and asserts the full output round-trips through the
-//!   decoder. proptest models this as a single generator call, which
-//!   cannot express the interactive shape.
+//!   `finish` and checks the model after each meaningful transition:
+//!   every `sync_flush` boundary must yield a decodable stream prefix
+//!   recovering exactly the bytes fed so far, and the final output
+//!   must round-trip. proptest models this as a single generator
+//!   call, which cannot express the interactive shape.
 //! - **Stateful decoder loop** — interleaves random feed chunks with
 //!   random partial output drains and asserts that every observation
 //!   is a prefix of the true decoded data, that the decoder finishes
@@ -67,7 +69,17 @@ fn run_feedback<F>(cases: usize, f: F) -> noprop::TestResult
 where
     F: Fn(&mut TestCaseContext) -> noprop::TestResult,
 {
-    noprop::Runner::new(SEED).run_feedback_guided(cases, f)?;
+    let mut runner = noprop::Runner::new(SEED);
+    runner.run_feedback_guided(cases, f)?;
+    // Gate on the feedback machinery itself: if the buckets ever become
+    // no-ops (e.g. someone switches this test back to plain `run`), the
+    // search would silently lose its corner-concentrating behavior while
+    // the roundtrip assertion still passes.
+    let stats = runner.stats();
+    assert!(
+        stats.discovered_features > 0,
+        "feedback-guided run discovered no features; feedback is not active"
+    );
     Ok(())
 }
 
@@ -112,9 +124,13 @@ fn sample_input_reaches_boundary_classes() -> noprop::TestResult {
     Ok(())
 }
 
-/// Chunk-size sequence: 1..=64 chunks, each 1..=128 bytes.
+/// Chunk-size sequence: 1..=64 chunks, each 1..=128 bytes. The
+/// single-chunk and 64-chunk extremes are boundary-sampled so short
+/// and long sequences are exercised deliberately.
 fn sample_chunks(ctx: &mut TestCaseContext) -> Vec<usize> {
-    let n = noprop::sample_usize_in(ctx, 1..=64);
+    let n = noprop::sample_with_boundaries(ctx, &[1usize, 64], noprop::Ratio::one_nth(4), |ctx| {
+        noprop::sample_usize_in(ctx, 1..=64)
+    });
     (0..n)
         .map(|_| noprop::sample_usize_in(ctx, 1..=128))
         .collect()
@@ -505,11 +521,15 @@ fn crc32_streaming_matches_one_shot() -> noprop::TestResult {
 // --- Stateful: encoder command loop ---------------------------------
 //
 // Drives the encoder through a random sequence of feed / sync_flush /
-// reset_history / finish and asserts the full concatenated output
-// round-trips through the decoder. The model is the flat concatenation
-// of every `feed` payload up to `finish`; sync_flush and
-// reset_history do not change the model. proptest's single-generator
-// shape cannot express this interactive sequence cleanly.
+// reset_history / finish. The model is the flat concatenation of every
+// `feed` payload up to `finish`; sync_flush and reset_history do not
+// change the model. proptest's single-generator shape cannot express
+// this interactive sequence cleanly.
+//
+// The model is checked after each meaningful transition, not only at
+// finalization: every `sync_flush` boundary must yield a stream prefix
+// that a decoder recovers byte-for-byte up to the flush point, and the
+// stream must remain continuable until `finish`.
 
 /// One command in the encoder command loop.
 #[derive(Debug, Clone)]
@@ -533,11 +553,20 @@ fn sample_cmd(ctx: &mut TestCaseContext) -> Cmd {
 
 #[test]
 fn stateful_encoder_command_loop_roundtrips() -> noprop::TestResult {
+    // 32 cases keep the interactive loop fast; the property does not
+    // need the full case budget.
     noprop::Runner::new(SEED).run(32, |ctx| {
-        let n_cmds = noprop::sample_usize_in(ctx, 0..=32);
+        let n_cmds = noprop::sample_with_boundaries(
+            ctx,
+            &[0usize, 32],
+            noprop::Ratio::one_nth(4),
+            |ctx| noprop::sample_usize_in(ctx, 0..=32),
+        );
         let mut encoder = Encoder::new();
+        let mut decoder = noflate::deflate::Decoder::new();
         let mut expected: Vec<u8> = Vec::new();
-        for _ in 0..n_cmds {
+        let mut decoded: Vec<u8> = Vec::new();
+        for step in 0..n_cmds {
             match sample_cmd(ctx) {
                 Cmd::Feed(bytes) => {
                     encoder
@@ -549,6 +578,33 @@ fn stateful_encoder_command_loop_roundtrips() -> noprop::TestResult {
                     encoder
                         .sync_flush()
                         .expect("sync_flush must succeed before finish");
+                    // sync_flush must make everything fed so far
+                    // available as a decodable stream prefix: feed the
+                    // emitted delta to the decoder and check it has
+                    // recovered `expected` bytes in total. The delta of a
+                    // flush with no pending input is just the empty
+                    // stored-block marker, so the decoder may emit
+                    // nothing new on that feed; the cumulative check
+                    // covers both cases. This validates the flush
+                    // boundary itself, not just the final concatenated
+                    // output.
+                    let delta = encoder.output().to_vec();
+                    encoder.advance(delta.len());
+                    decoder
+                        .feed(&delta)
+                        .expect("flushed prefix must be a valid stream");
+                    let produced = decoder.output().to_vec();
+                    decoder.advance(produced.len());
+                    decoded.extend_from_slice(&produced);
+                    assert_eq!(
+                        decoded,
+                        expected,
+                        "after sync_flush at step {step}, the decoder must have recovered all bytes fed so far"
+                    );
+                    assert!(
+                        !decoder.is_finished(),
+                        "the stream must remain continuable after sync_flush"
+                    );
                 }
                 Cmd::ResetHistory => {
                     encoder.reset_history();
@@ -556,11 +612,25 @@ fn stateful_encoder_command_loop_roundtrips() -> noprop::TestResult {
             }
         }
         encoder.finish().expect("finish");
-        let compressed = encoder.output().to_vec();
-        let decompressed = noflate::deflate::decompress(&compressed).expect("decompress");
+        let delta = encoder.output().to_vec();
+        encoder.advance(delta.len());
+        decoder
+            .feed(&delta)
+            .expect("finish output must be a valid stream");
+        let produced = decoder.output().to_vec();
+        decoder.advance(produced.len());
+        decoded.extend_from_slice(&produced);
+        assert!(
+            decoder.is_finished(),
+            "the decoder must finish once the encoder has finished"
+        );
         assert_eq!(
-            decompressed, expected,
-            "command loop must round-trip to the concatenated feed payloads"
+            decoded, expected,
+            "the full stream must round-trip to the concatenated feed payloads"
+        );
+        assert!(
+            encoder.is_finished(),
+            "all encoder output must be consumed"
         );
         Ok(())
     })?;
