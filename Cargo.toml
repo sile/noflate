@@ -16,8 +16,8 @@ categories = ["compression", "encoding", "no-std"]
 flate2 = "1"
 crc32fast = "1"
 adler32 = "1"
+noprop = "0.1"
 
 [workspace]
-members = ["pbt"]
 exclude = ["fuzz"]
 
