@@ -53,15 +53,21 @@ use noprop::TestCaseContext;
 
 // --- Runner config ---------------------------------------------------
 
-const SEED: u64 = 0xDEAD_BEEF_1234_5678;
 const CASES: usize = 64;
 const MAX_INPUT: usize = 32 * 1024;
+
+/// Seed from `NOFLATE_PBT_SEED` (decimal or hex) when set, for
+/// deterministic reproduction of a reported failure; a fresh
+/// time-derived seed otherwise.
+fn seed() -> noprop::TestResult<u64> {
+    noprop::seed_from_env_or_time("NOFLATE_PBT_SEED")
+}
 
 fn run<F>(f: F) -> noprop::TestResult
 where
     F: Fn(&mut TestCaseContext) -> noprop::TestResult,
 {
-    noprop::Runner::new(SEED).run(CASES, f)?;
+    noprop::Runner::new(seed()?).run(CASES, f)?;
     Ok(())
 }
 
@@ -69,7 +75,7 @@ fn run_feedback<F>(cases: usize, f: F) -> noprop::TestResult
 where
     F: Fn(&mut TestCaseContext) -> noprop::TestResult,
 {
-    let mut runner = noprop::Runner::new(SEED);
+    let mut runner = noprop::Runner::new(seed()?);
     runner.run_feedback_guided(cases, f)?;
     // Gate on the feedback machinery itself: if the buckets ever become
     // no-ops (e.g. someone switches this test back to plain `run`), the
@@ -108,7 +114,7 @@ fn sample_input_reaches_boundary_classes() -> noprop::TestResult {
     let hit_empty = Cell::new(false);
     let hit_singleton = Cell::new(false);
     let hit_max = Cell::new(false);
-    noprop::Runner::new(SEED).run(CASES, |ctx| {
+    noprop::Runner::new(seed()?).run(CASES, |ctx| {
         let input = sample_input(ctx);
         hit_empty.set(hit_empty.get() || input.is_empty());
         hit_singleton.set(hit_singleton.get() || input.len() == 1);
@@ -555,7 +561,7 @@ fn sample_cmd(ctx: &mut TestCaseContext) -> Cmd {
 fn stateful_encoder_command_loop_roundtrips() -> noprop::TestResult {
     // 32 cases keep the interactive loop fast; the property does not
     // need the full case budget.
-    noprop::Runner::new(SEED).run(32, |ctx| {
+    noprop::Runner::new(seed()?).run(32, |ctx| {
         let n_cmds = noprop::sample_with_boundaries(
             ctx,
             &[0usize, 32],
