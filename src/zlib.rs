@@ -98,17 +98,40 @@ impl Decoder {
                 }
                 State::Body => {
                     self.deflate.feed(rest)?;
-                    let new_bytes = self.deflate.output();
-                    self.adler.update(new_bytes);
-                    self.output.feed(new_bytes);
-                    let n = new_bytes.len();
-                    self.deflate.advance(n);
-                    if self.deflate.is_finished() {
-                        self.state = State::Trailer;
-                        rest = &[];
-                        self.consume_deflate_tail()?;
-                    } else {
-                        rest = &[];
+                    rest = &[];
+                    // Drain the deflate sub-stream, resuming with empty feeds
+                    // after any internal output-cap yield, until the final
+                    // block is consumed or it can make no further progress
+                    // without more compressed input. The empty-feed progress
+                    // check distinguishes a cap yield (resumable) from a step
+                    // that genuinely needs more bytes (stop and wait): a
+                    // `NeedMoreBytes` may leave unread input buffered even
+                    // though decoding cannot proceed, so `remaining_input`
+                    // alone cannot tell them apart.
+                    loop {
+                        let new_bytes = self.deflate.output();
+                        self.adler.update(new_bytes);
+                        self.output.feed(new_bytes);
+                        let n = new_bytes.len();
+                        self.deflate.advance(n);
+                        if self.deflate.is_finished() {
+                            self.state = State::Trailer;
+                            self.consume_deflate_tail()?;
+                            break;
+                        }
+                        let before_remaining = self.deflate.remaining_input().len();
+                        self.deflate.feed(&[])?;
+                        // A `feed` may produce the final block's output and
+                        // finish in the same call; loop back to collect that
+                        // output before transitioning to the trailer.
+                        if self.deflate.output().is_empty()
+                            && self.deflate.remaining_input().len() == before_remaining
+                            && !self.deflate.is_finished()
+                        {
+                            // The sub-stream needs more compressed bytes;
+                            // hand control back to the caller.
+                            break;
+                        }
                     }
                 }
                 State::Trailer => {
@@ -372,7 +395,11 @@ mod tests {
 
     #[test]
     fn roundtrip_various_sizes() {
-        for len in [1usize, 7, 1024, 65_536] {
+        // `75_536` spans two 64 KiB blocks with a partial final block, so the
+        // deflate sub-stream finishes mid-block after an output-cap yield;
+        // the container must collect that final partial output rather than
+        // truncating it.
+        for len in [1usize, 7, 1024, 65_536, 75_536, 262_144] {
             let input: Vec<u8> = (0..len).map(|i| (i * 13 + 7) as u8).collect();
             let c = compress(&input).unwrap();
             assert_eq!(decompress(&c).unwrap(), input, "len={len}");
