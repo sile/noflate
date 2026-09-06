@@ -7,8 +7,8 @@
 //! "Need more bytes" is a no-op return from `feed`, not an error.
 //!
 //! To keep memory bounded, `feed` may also return early once the decoder has
-//! buffered [`MAX_INTERNAL_BUFFER`] decompressed bytes that the caller has
-//! not yet drained — a single block can expand arbitrarily ([RFC 1951] has
+//! buffered 64 KiB of decompressed bytes that the caller has not yet drained
+//! — a single block can expand arbitrarily ([RFC 1951] has
 //! no per-block maximum), and without this cap the whole block would be
 //! buffered before control returned. Drain via `output` / `advance`, then
 //! call `feed` again (with remaining input, or an empty slice once the
@@ -132,8 +132,8 @@ impl Decoder {
     /// waits for more bytes.
     ///
     /// The call may also return `Ok(())` before the stream is finished once
-    /// [`MAX_INTERNAL_BUFFER`] decompressed bytes have been buffered and not
-    /// yet drained. Drain them via [`Decoder::output`] / [`Decoder::advance`],
+    /// 64 KiB of decompressed bytes have been buffered and not yet drained.
+    /// Drain them via [`Decoder::output`] / [`Decoder::advance`],
     /// then call `feed` again (with remaining input, or `&[]` once the
     /// compressed data is exhausted) to resume. A `feed` call is therefore
     /// not guaranteed to consume the entire stream; callers that need a
@@ -741,8 +741,8 @@ fn step_symbol_loop(
 enum StepOutcome {
     Progress,
     NeedMoreBytes,
-    /// The output buffer reached [`MAX_INTERNAL_BUFFER`] and control should
-    /// return to the caller so it can drain the produced bytes. Unlike
+    /// The output buffer reached 64 KiB and control should return to the
+    /// caller so it can drain the produced bytes. Unlike
     /// `NeedMoreBytes`, no input is awaited and no snapshot is restored.
     Yield,
     Finished,
