@@ -884,15 +884,15 @@ mod tests {
         let payload: alloc::vec::Vec<u8> =
             (0..10 * 1024 * 1024).map(|i| (i * 37 + 13) as u8).collect();
         let mut e = Encoder::with_options(EncodeOptions::new().buffer_all_input());
-        e.feed(&payload).unwrap();
-        e.finish().unwrap();
+        e.feed(&payload).expect("feed failed");
+        e.finish().expect("finish failed");
         let compressed = e.output().to_vec();
 
         let mut d = Decoder::new();
         let mut decoded = alloc::vec::Vec::with_capacity(payload.len());
         let mut max_internal = 0usize;
         for chunk in compressed.chunks(64 * 1024) {
-            d.feed(chunk).unwrap();
+            d.feed(chunk).expect("feed failed");
             // Inspect the unread buffer length through the public surface
             // BEFORE draining: output().len() is (total - drained), which is
             // bounded by the internal cap plus one symbol's overshoot.
@@ -933,15 +933,15 @@ mod tests {
         payload.extend_from_slice(&unit);
 
         let mut e = Encoder::with_options(EncodeOptions::new().buffer_all_input());
-        e.feed(&payload).unwrap();
-        e.finish().unwrap();
+        e.feed(&payload).expect("feed failed");
+        e.finish().expect("finish failed");
         let compressed = e.output().to_vec();
 
         let mut d = Decoder::new();
         let mut decoded = alloc::vec::Vec::with_capacity(payload.len());
         // Drain in small chunks so compaction runs many times.
         for chunk in compressed.chunks(32 * 1024) {
-            d.feed(chunk).unwrap();
+            d.feed(chunk).expect("feed failed");
             let produced = d.output().to_vec();
             decoded.extend_from_slice(&produced);
             d.advance(produced.len());
@@ -962,8 +962,8 @@ mod tests {
 
         let payload = alloc::vec![0u8; 8 * 1024 * 1024];
         let mut e = Encoder::with_options(EncodeOptions::new().buffer_all_input());
-        e.feed(&payload).unwrap();
-        e.finish().unwrap();
+        e.feed(&payload).expect("feed failed");
+        e.finish().expect("finish failed");
         let compressed = e.output().to_vec();
 
         let mut d = Decoder::new();

@@ -38,23 +38,23 @@ fn time_once<F: FnOnce() -> Vec<u8>>(name: &'static str, _input_len: usize, f: F
 }
 
 fn noflate_compress(input: &[u8]) -> Vec<u8> {
-    noflate::deflate::compress(input).unwrap()
+    noflate::deflate::compress(input).expect("compress failed")
 }
 
 fn noflate_decompress(input: &[u8]) -> Vec<u8> {
-    noflate::deflate::decompress(input).unwrap()
+    noflate::deflate::decompress(input).expect("decompress failed")
 }
 
 fn flate2_compress(input: &[u8]) -> Vec<u8> {
     let mut e = flate2::write::DeflateEncoder::new(Vec::new(), flate2::Compression::default());
-    e.write_all(input).unwrap();
-    e.finish().unwrap()
+    e.write_all(input).expect("write_all failed");
+    e.finish().expect("finish failed")
 }
 
 fn flate2_decompress(input: &[u8]) -> Vec<u8> {
     let mut d = flate2::read::DeflateDecoder::new(input);
     let mut out = Vec::new();
-    d.read_to_end(&mut out).unwrap();
+    d.read_to_end(&mut out).expect("read_to_end failed");
     out
 }
 

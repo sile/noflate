@@ -287,8 +287,9 @@ mod tests {
     #[test]
     fn fixed_literal_table_roundtrip() {
         let lengths = fixed_literal_code_lengths();
-        let enc = HuffmanEncoder::from_code_lengths(&lengths).unwrap();
-        let dec = HuffmanDecoder::from_code_lengths(&lengths, None, Some(END_OF_BLOCK)).unwrap();
+        let enc = HuffmanEncoder::from_code_lengths(&lengths).expect("from_code_lengths failed");
+        let dec = HuffmanDecoder::from_code_lengths(&lengths, None, Some(END_OF_BLOCK))
+            .expect("from_code_lengths failed");
 
         let mut out = Vec::new();
         {
@@ -307,7 +308,7 @@ mod tests {
             if lengths[sym as usize] == 0 {
                 continue;
             }
-            assert_eq!(dec.decode(&mut r).unwrap(), sym);
+            assert_eq!(dec.decode(&mut r).expect("decode failed"), sym);
         }
     }
 

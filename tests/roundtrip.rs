@@ -13,8 +13,8 @@ fn all_options() -> [EncodeOptions; 3] {
 
 fn compress_with(opts: EncodeOptions, input: &[u8]) -> Vec<u8> {
     let mut e = Encoder::with_options(opts);
-    e.feed(input).unwrap();
-    e.finish().unwrap();
+    e.feed(input).expect("feed failed");
+    e.finish().expect("finish failed");
     let out = e.output().to_vec();
     e.advance(out.len());
     assert!(e.is_finished());
@@ -95,9 +95,9 @@ fn english_paragraph() {
 fn stored_multi_block_64k_plus() {
     let input = vec![b'x'; 70_000];
     let mut e = Encoder::with_options(EncodeOptions::new().stored());
-    e.feed(&input).unwrap();
-    e.finish().unwrap();
+    e.feed(&input).expect("feed failed");
+    e.finish().expect("finish failed");
     let compressed = e.output().to_vec();
     e.advance(compressed.len());
-    assert_eq!(decompress(&compressed).unwrap(), input);
+    assert_eq!(decompress(&compressed).expect("decompress failed"), input);
 }

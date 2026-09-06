@@ -103,7 +103,7 @@ fn run_codec(
 
 fn decode_zlib_streaming(input: &[u8]) -> usize {
     let mut decoder = noflate::zlib::Decoder::new();
-    decoder.feed(input).unwrap();
+    decoder.feed(input).expect("feed failed");
     let mut total = 0usize;
     while !decoder.output().is_empty() {
         let take = decoder.output().len().min(1024);
@@ -116,7 +116,7 @@ fn decode_zlib_streaming(input: &[u8]) -> usize {
 
 fn decode_gzip_streaming(input: &[u8]) -> usize {
     let mut decoder = noflate::gzip::Decoder::new();
-    decoder.feed(input).unwrap();
+    decoder.feed(input).expect("feed failed");
     let mut total = 0usize;
     while !decoder.output().is_empty() {
         let take = decoder.output().len().min(1024);
@@ -143,16 +143,16 @@ fn main() {
             "zlib",
             &input,
             repeats,
-            |bytes| noflate::zlib::compress(bytes).unwrap(),
-            |bytes| noflate::zlib::decompress(bytes).unwrap(),
+            |bytes| noflate::zlib::compress(bytes).expect("compress failed"),
+            |bytes| noflate::zlib::decompress(bytes).expect("decompress failed"),
             decode_zlib_streaming,
         );
         run_codec(
             "gzip",
             &input,
             repeats,
-            |bytes| noflate::gzip::compress(bytes).unwrap(),
-            |bytes| noflate::gzip::decompress(bytes).unwrap(),
+            |bytes| noflate::gzip::compress(bytes).expect("compress failed"),
+            |bytes| noflate::gzip::decompress(bytes).expect("decompress failed"),
             decode_gzip_streaming,
         );
         println!();

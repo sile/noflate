@@ -45,11 +45,7 @@
 
 use std::io::{Read, Write};
 
-use flate2::Compression;
-use flate2::read::{DeflateDecoder, GzDecoder, ZlibDecoder};
-use flate2::write::{DeflateEncoder, GzEncoder, ZlibEncoder};
 use noflate::deflate::{EncodeOptions, Encoder};
-use noprop::TestCaseContext;
 
 // --- Runner config ---------------------------------------------------
 
@@ -65,7 +61,7 @@ fn seed() -> noprop::TestResult<u64> {
 
 fn run<F>(f: F) -> noprop::TestResult
 where
-    F: Fn(&mut TestCaseContext) -> noprop::TestResult,
+    F: Fn(&mut noprop::TestCaseContext) -> noprop::TestResult,
 {
     noprop::Runner::new(seed()?).run(CASES, f)?;
     Ok(())
@@ -73,7 +69,7 @@ where
 
 fn run_feedback<F>(cases: usize, f: F) -> noprop::TestResult
 where
-    F: Fn(&mut TestCaseContext) -> noprop::TestResult,
+    F: Fn(&mut noprop::TestCaseContext) -> noprop::TestResult,
 {
     let mut runner = noprop::Runner::new(seed()?);
     runner.run_feedback_guided(cases, f)?;
@@ -91,7 +87,7 @@ where
 
 // --- Input generators ------------------------------------------------
 
-fn sample_input(ctx: &mut TestCaseContext) -> Vec<u8> {
+fn sample_input(ctx: &mut noprop::TestCaseContext) -> Vec<u8> {
     // Boundary sampling gives the empty, singleton, and maximum classes
     // meaningful probability instead of the ~1/32769 a uniform draw over
     // 0..=MAX_INPUT would give them.
@@ -133,7 +129,7 @@ fn sample_input_reaches_boundary_classes() -> noprop::TestResult {
 /// Chunk-size sequence: 1..=64 chunks, each 1..=128 bytes. The
 /// single-chunk and 64-chunk extremes are boundary-sampled so short
 /// and long sequences are exercised deliberately.
-fn sample_chunks(ctx: &mut TestCaseContext) -> Vec<usize> {
+fn sample_chunks(ctx: &mut noprop::TestCaseContext) -> Vec<usize> {
     let n = noprop::sample_with_boundaries(ctx, &[1usize, 64], noprop::Ratio::one_nth(4), |ctx| {
         noprop::sample_usize_in(ctx, 1..=64)
     });
@@ -145,41 +141,41 @@ fn sample_chunks(ctx: &mut TestCaseContext) -> Vec<usize> {
 // --- flate2 reference helpers ---------------------------------------
 
 fn flate2_deflate_at_level(data: &[u8], level: u32) -> Vec<u8> {
-    let mut e = DeflateEncoder::new(Vec::new(), Compression::new(level));
-    e.write_all(data).unwrap();
-    e.finish().unwrap()
+    let mut e = flate2::write::DeflateEncoder::new(Vec::new(), flate2::Compression::new(level));
+    e.write_all(data).expect("write_all failed");
+    e.finish().expect("finish failed")
 }
 
 fn flate2_inflate(data: &[u8]) -> Vec<u8> {
-    let mut d = DeflateDecoder::new(data);
+    let mut d = flate2::read::DeflateDecoder::new(data);
     let mut out = Vec::new();
-    d.read_to_end(&mut out).unwrap();
+    d.read_to_end(&mut out).expect("read_to_end failed");
     out
 }
 
 fn flate2_zlib_encode_at_level(data: &[u8], level: u32) -> Vec<u8> {
-    let mut e = ZlibEncoder::new(Vec::new(), Compression::new(level));
-    e.write_all(data).unwrap();
-    e.finish().unwrap()
+    let mut e = flate2::write::ZlibEncoder::new(Vec::new(), flate2::Compression::new(level));
+    e.write_all(data).expect("write_all failed");
+    e.finish().expect("finish failed")
 }
 
 fn flate2_zlib_decode(data: &[u8]) -> Vec<u8> {
-    let mut d = ZlibDecoder::new(data);
+    let mut d = flate2::read::ZlibDecoder::new(data);
     let mut out = Vec::new();
-    d.read_to_end(&mut out).unwrap();
+    d.read_to_end(&mut out).expect("read_to_end failed");
     out
 }
 
 fn flate2_gzip_encode_at_level(data: &[u8], level: u32) -> Vec<u8> {
-    let mut e = GzEncoder::new(Vec::new(), Compression::new(level));
-    e.write_all(data).unwrap();
-    e.finish().unwrap()
+    let mut e = flate2::write::GzEncoder::new(Vec::new(), flate2::Compression::new(level));
+    e.write_all(data).expect("write_all failed");
+    e.finish().expect("finish failed")
 }
 
 fn flate2_gzip_decode(data: &[u8]) -> Vec<u8> {
-    let mut d = GzDecoder::new(data);
+    let mut d = flate2::read::GzDecoder::new(data);
     let mut out = Vec::new();
-    d.read_to_end(&mut out).unwrap();
+    d.read_to_end(&mut out).expect("read_to_end failed");
     out
 }
 
@@ -461,7 +457,7 @@ fn adler32_matches_reference() -> noprop::TestResult {
     run(|ctx| {
         let input = sample_input(ctx);
         let ours = noflate::zlib::adler32(&input);
-        let reference = adler32::adler32(&input[..]).unwrap();
+        let reference = adler32::adler32(&input[..]).expect("adler32 failed");
         assert_eq!(ours, reference);
         Ok(())
     })
@@ -545,7 +541,7 @@ enum Cmd {
     ResetHistory,
 }
 
-fn sample_cmd(ctx: &mut TestCaseContext) -> Cmd {
+fn sample_cmd(ctx: &mut noprop::TestCaseContext) -> Cmd {
     // 60% Feed, 25% SyncFlush, 15% ResetHistory
     match noprop::sample_weighted_index(ctx, &[60, 25, 15]) {
         0 => {

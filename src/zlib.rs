@@ -380,17 +380,17 @@ mod tests {
     #[test]
     fn roundtrip_hello() {
         let original = b"Hello, zlib!";
-        let compressed = compress(original).unwrap();
+        let compressed = compress(original).expect("compress failed");
         assert_eq!(compressed[0], 0x78);
         assert_eq!(compressed[1], 0x9C);
-        let decompressed = decompress(&compressed).unwrap();
+        let decompressed = decompress(&compressed).expect("decompress failed");
         assert_eq!(decompressed, original);
     }
 
     #[test]
     fn roundtrip_empty() {
-        let compressed = compress(b"").unwrap();
-        assert_eq!(decompress(&compressed).unwrap(), b"");
+        let compressed = compress(b"").expect("compress failed");
+        assert_eq!(decompress(&compressed).expect("decompress failed"), b"");
     }
 
     #[test]
@@ -401,17 +401,21 @@ mod tests {
         // truncating it.
         for len in [1usize, 7, 1024, 65_536, 75_536, 262_144] {
             let input: Vec<u8> = (0..len).map(|i| (i * 13 + 7) as u8).collect();
-            let c = compress(&input).unwrap();
-            assert_eq!(decompress(&c).unwrap(), input, "len={len}");
+            let c = compress(&input).expect("compress failed");
+            assert_eq!(
+                decompress(&c).expect("decompress failed"),
+                input,
+                "len={len}"
+            );
         }
     }
 
     #[test]
     fn incremental_feed_one_byte_at_a_time() {
-        let compressed = compress(b"hello world zlib streaming").unwrap();
+        let compressed = compress(b"hello world zlib streaming").expect("compress failed");
         let mut d = Decoder::new();
         for &byte in &compressed {
-            d.feed(&[byte]).unwrap();
+            d.feed(&[byte]).expect("feed failed");
         }
         assert!(d.is_finished());
         let out = d.output().to_vec();
@@ -421,7 +425,7 @@ mod tests {
 
     #[test]
     fn tampered_adler32_rejected() {
-        let mut c = compress(b"the quick brown fox").unwrap();
+        let mut c = compress(b"the quick brown fox").expect("compress failed");
         let last = c.len() - 1;
         c[last] ^= 0x01;
         assert!(decompress(&c).is_err());
@@ -429,7 +433,7 @@ mod tests {
 
     #[test]
     fn header_fcheck_validated() {
-        let mut c = compress(b"hello").unwrap();
+        let mut c = compress(b"hello").expect("compress failed");
         c[1] ^= 0x01;
         assert!(decompress(&c).is_err());
     }
@@ -437,21 +441,24 @@ mod tests {
     #[test]
     fn encoder_streaming_writes_to_output_buffer() {
         let mut e = Encoder::new();
-        e.feed(b"streaming ").unwrap();
-        e.feed(b"zlib ").unwrap();
-        e.feed(b"test").unwrap();
-        e.finish().unwrap();
+        e.feed(b"streaming ").expect("feed failed");
+        e.feed(b"zlib ").expect("feed failed");
+        e.feed(b"test").expect("feed failed");
+        e.finish().expect("finish failed");
         let out = e.output().to_vec();
         e.advance(out.len());
         assert!(e.is_finished());
-        assert_eq!(decompress(&out).unwrap(), b"streaming zlib test");
+        assert_eq!(
+            decompress(&out).expect("decompress failed"),
+            b"streaming zlib test"
+        );
     }
 
     #[test]
     fn rejects_bytes_after_finish() {
-        let compressed = compress(b"x").unwrap();
+        let compressed = compress(b"x").expect("compress failed");
         let mut d = Decoder::new();
-        d.feed(&compressed).unwrap();
+        d.feed(&compressed).expect("feed failed");
         assert!(d.is_finished());
         assert!(d.feed(b"y").is_err());
     }
@@ -465,13 +472,13 @@ mod tests {
         let mut total = 0usize;
         let mut max_internal = 0usize;
         for _ in 0..160 {
-            e.feed(&chunk).unwrap();
+            e.feed(&chunk).expect("feed failed");
             let out = e.output().to_vec();
             total += out.len();
             e.advance(out.len());
             max_internal = max_internal.max(e.output.len());
         }
-        e.finish().unwrap();
+        e.finish().expect("finish failed");
         let tail = e.output().to_vec();
         total += tail.len();
         e.advance(tail.len());
@@ -488,17 +495,24 @@ mod tests {
         use std::io::{Read, Write};
 
         // Our output -> flate2's decoder.
-        let ours = compress(b"noflate -> flate2").unwrap();
+        let ours = compress(b"noflate -> flate2").expect("compress failed");
         let mut their_dec = flate2::read::ZlibDecoder::new(&ours[..]);
         let mut decoded = Vec::new();
-        their_dec.read_to_end(&mut decoded).unwrap();
+        their_dec
+            .read_to_end(&mut decoded)
+            .expect("read_to_end failed");
         assert_eq!(decoded, b"noflate -> flate2");
 
         // flate2's output -> our decoder.
         let mut their_enc =
             flate2::write::ZlibEncoder::new(Vec::new(), flate2::Compression::default());
-        their_enc.write_all(b"flate2 -> noflate").unwrap();
-        let theirs = their_enc.finish().unwrap();
-        assert_eq!(decompress(&theirs).unwrap(), b"flate2 -> noflate");
+        their_enc
+            .write_all(b"flate2 -> noflate")
+            .expect("write_all failed");
+        let theirs = their_enc.finish().expect("finish failed");
+        assert_eq!(
+            decompress(&theirs).expect("decompress failed"),
+            b"flate2 -> noflate"
+        );
     }
 }

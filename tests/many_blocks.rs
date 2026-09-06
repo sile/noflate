@@ -59,14 +59,14 @@ fn make_gzip_stream(blocks: usize) -> Vec<u8> {
 #[test]
 fn deflate_decodes_many_empty_blocks() {
     let stream = make_deflate_stream(BLOCKS);
-    let decoded = noflate::deflate::decompress(&stream).unwrap();
+    let decoded = noflate::deflate::decompress(&stream).expect("decompress failed");
     assert_eq!(decoded, WASM);
 }
 
 #[test]
 fn gzip_decodes_many_empty_blocks() {
     let stream = make_gzip_stream(BLOCKS);
-    let decoded = noflate::gzip::decompress(&stream).unwrap();
+    let decoded = noflate::gzip::decompress(&stream).expect("decompress failed");
     assert_eq!(decoded, WASM);
 }
 
@@ -77,7 +77,7 @@ fn deflate_streaming_decodes_many_empty_blocks() {
     let stream = make_deflate_stream(BLOCKS);
     let mut decoder = noflate::deflate::Decoder::new();
     for chunk in stream.chunks(4096) {
-        decoder.feed(chunk).unwrap();
+        decoder.feed(chunk).expect("feed failed");
     }
     assert!(decoder.is_finished());
     let out = decoder.output().to_vec();

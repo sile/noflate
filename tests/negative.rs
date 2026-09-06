@@ -11,7 +11,7 @@ fn reserved_block_type_errors() {
 
 #[test]
 fn truncated_stream_is_not_an_error() {
-    let compressed = compress(b"hello world").unwrap();
+    let compressed = compress(b"hello world").expect("compress failed");
     let truncated = &compressed[..compressed.len() / 2];
     let mut d = Decoder::new();
     d.feed(truncated).expect("truncated feed is not an error");
@@ -20,9 +20,9 @@ fn truncated_stream_is_not_an_error() {
 
 #[test]
 fn feeding_after_finish_errors() {
-    let compressed = compress(b"abc").unwrap();
+    let compressed = compress(b"abc").expect("compress failed");
     let mut d = Decoder::new();
-    d.feed(&compressed).unwrap();
+    d.feed(&compressed).expect("feed failed");
     assert!(d.is_finished());
     assert!(d.feed(b"extra").is_err());
 }
@@ -31,7 +31,7 @@ fn feeding_after_finish_errors() {
 fn decompress_missing_final_block_marker() {
     // Partial compressed stream — decompress should say the stream ended
     // before the final block.
-    let compressed = compress(b"abc").unwrap();
+    let compressed = compress(b"abc").expect("compress failed");
     let truncated = &compressed[..compressed.len() - 1];
     assert!(decompress(truncated).is_err());
 }
@@ -39,9 +39,9 @@ fn decompress_missing_final_block_marker() {
 #[test]
 #[should_panic]
 fn advance_past_end_panics() {
-    let compressed = compress(b"hi").unwrap();
+    let compressed = compress(b"hi").expect("compress failed");
     let mut d = Decoder::new();
-    d.feed(&compressed).unwrap();
+    d.feed(&compressed).expect("feed failed");
     let len = d.output().len();
     d.advance(len + 1);
 }

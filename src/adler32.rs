@@ -103,7 +103,7 @@ mod tests {
     fn matches_reference_crate() {
         let input: Vec<u8> = (0..1_000_000).map(|i| (i % 251) as u8).collect();
         let ours = checksum(&input);
-        let reference = adler32::adler32(&input[..]).unwrap();
+        let reference = adler32::adler32(&input[..]).expect("adler32 failed");
         assert_eq!(ours, reference);
     }
 }

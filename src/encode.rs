@@ -514,8 +514,8 @@ mod tests {
 
     fn compress_with(opts: EncodeOptions, input: &[u8]) -> Vec<u8> {
         let mut e = Encoder::with_options(opts);
-        e.feed(input).unwrap();
-        e.finish().unwrap();
+        e.feed(input).expect("feed failed");
+        e.finish().expect("finish failed");
         assert!(e.is_finished() || !e.output().is_empty());
         let out = e.output().to_vec();
         e.advance(out.len());
@@ -527,21 +527,21 @@ mod tests {
     fn dynamic_roundtrip() {
         let input = b"banana banana banana banana";
         let compressed = compress_with(EncodeOptions::new(), input);
-        assert_eq!(decompress(&compressed).unwrap(), input);
+        assert_eq!(decompress(&compressed).expect("decompress failed"), input);
     }
 
     #[test]
     fn fixed_roundtrip() {
         let input = b"hello hello hello";
         let compressed = compress_with(EncodeOptions::new().fixed_huffman(), input);
-        assert_eq!(decompress(&compressed).unwrap(), input);
+        assert_eq!(decompress(&compressed).expect("decompress failed"), input);
     }
 
     #[test]
     fn stored_roundtrip() {
         let input = b"this is stored data";
         let compressed = compress_with(EncodeOptions::new().stored(), input);
-        assert_eq!(decompress(&compressed).unwrap(), input);
+        assert_eq!(decompress(&compressed).expect("decompress failed"), input);
     }
 
     #[test]
@@ -552,7 +552,7 @@ mod tests {
             EncodeOptions::new().stored(),
         ] {
             let compressed = compress_with(opts, b"");
-            assert_eq!(decompress(&compressed).unwrap(), b"");
+            assert_eq!(decompress(&compressed).expect("decompress failed"), b"");
         }
     }
 
@@ -561,46 +561,46 @@ mod tests {
         let input = vec![b'a'; 2048];
         let compressed = compress_with(EncodeOptions::new(), &input);
         assert!(compressed.len() < 64);
-        assert_eq!(decompress(&compressed).unwrap(), input);
+        assert_eq!(decompress(&compressed).expect("decompress failed"), input);
     }
 
     #[test]
     fn stored_splits_at_0xffff() {
         let input = vec![b'x'; 0xFFFF + 10];
         let compressed = compress_with(EncodeOptions::new().stored(), &input);
-        assert_eq!(decompress(&compressed).unwrap(), input);
+        assert_eq!(decompress(&compressed).expect("decompress failed"), input);
     }
 
     #[test]
     fn feed_produces_output_during_block_split() {
         let input = vec![b'a'; 128 * 1024];
         let mut e = Encoder::new();
-        e.feed(&input).unwrap();
+        e.feed(&input).expect("feed failed");
         assert!(
             !e.output().is_empty(),
             "expected intermediate output from block splitting"
         );
-        e.finish().unwrap();
+        e.finish().expect("finish failed");
         let out = e.output().to_vec();
         e.advance(out.len());
         assert!(e.is_finished());
-        assert_eq!(decompress(&out).unwrap(), input);
+        assert_eq!(decompress(&out).expect("decompress failed"), input);
     }
 
     #[test]
     fn buffer_all_input_no_intermediate_output() {
         let input = vec![b'a'; 128 * 1024];
         let mut e = Encoder::with_options(EncodeOptions::new().buffer_all_input());
-        e.feed(&input).unwrap();
+        e.feed(&input).expect("feed failed");
         assert!(
             e.output().is_empty(),
             "buffer_all_input should not produce output during feed"
         );
-        e.finish().unwrap();
+        e.finish().expect("finish failed");
         let out = e.output().to_vec();
         e.advance(out.len());
         assert!(e.is_finished());
-        assert_eq!(decompress(&out).unwrap(), input);
+        assert_eq!(decompress(&out).expect("decompress failed"), input);
     }
 
     #[test]
@@ -612,14 +612,14 @@ mod tests {
             EncodeOptions::new().stored(),
         ] {
             let compressed = compress_with(opts.clone(), &input);
-            assert_eq!(decompress(&compressed).unwrap(), input);
+            assert_eq!(decompress(&compressed).expect("decompress failed"), input);
         }
     }
 
     #[test]
     fn sync_flush_marker_is_empty_stored_block() {
         let mut e = Encoder::new();
-        e.sync_flush().unwrap();
+        e.sync_flush().expect("sync_flush failed");
         // From bit state (0, 0): write_bit(false) + write_bits(2, 0b00)
         // + align_to_byte pads out to one 0x00 byte; then the 4-byte
         // trailer is appended literally.
@@ -634,14 +634,14 @@ mod tests {
             EncodeOptions::new().stored(),
         ] {
             let mut e = Encoder::with_options(opts);
-            e.feed(b"hello ").unwrap();
-            e.sync_flush().unwrap();
-            e.feed(b"world").unwrap();
-            e.finish().unwrap();
+            e.feed(b"hello ").expect("feed failed");
+            e.sync_flush().expect("sync_flush failed");
+            e.feed(b"world").expect("feed failed");
+            e.finish().expect("finish failed");
             let out = e.output().to_vec();
             e.advance(out.len());
             assert!(e.is_finished());
-            assert_eq!(decompress(&out).unwrap(), b"hello world");
+            assert_eq!(decompress(&out).expect("decompress failed"), b"hello world");
         }
     }
 
@@ -657,8 +657,8 @@ mod tests {
         let mut e = Encoder::new();
         let mut wire: Vec<Vec<u8>> = Vec::new();
         for msg in messages {
-            e.feed(msg).unwrap();
-            e.sync_flush().unwrap();
+            e.feed(msg).expect("feed failed");
+            e.sync_flush().expect("sync_flush failed");
             let mut frame = e.output().to_vec();
             e.advance(frame.len());
             assert!(frame.ends_with(&[0x00, 0x00, 0xFF, 0xFF]));
@@ -667,8 +667,8 @@ mod tests {
         }
         let mut d = Decoder::new();
         for frame in &wire {
-            d.feed(frame).unwrap();
-            d.feed(&[0x00, 0x00, 0xFF, 0xFF]).unwrap();
+            d.feed(frame).expect("feed failed");
+            d.feed(&[0x00, 0x00, 0xFF, 0xFF]).expect("feed failed");
         }
         let decoded = d.output().to_vec();
         let expected: Vec<u8> = messages.iter().flat_map(|m| m.iter().copied()).collect();
@@ -683,18 +683,18 @@ mod tests {
         let payload = b"abcdefghijklmnopqrstuvwxyz0123456789";
 
         let mut fresh = Encoder::new();
-        fresh.feed(payload).unwrap();
-        fresh.sync_flush().unwrap();
+        fresh.feed(payload).expect("feed failed");
+        fresh.sync_flush().expect("sync_flush failed");
         let baseline = fresh.output().to_vec();
 
         let mut e = Encoder::new();
-        e.feed(payload).unwrap();
-        e.sync_flush().unwrap();
+        e.feed(payload).expect("feed failed");
+        e.sync_flush().expect("sync_flush failed");
         let first_len = e.output().len();
         e.advance(first_len);
         e.reset_history();
-        e.feed(payload).unwrap();
-        e.sync_flush().unwrap();
+        e.feed(payload).expect("feed failed");
+        e.sync_flush().expect("sync_flush failed");
         let second = e.output().to_vec();
         e.advance(second.len());
         assert_eq!(second, baseline);
@@ -703,8 +703,8 @@ mod tests {
     #[test]
     fn sync_flush_after_finish_errors() {
         let mut e = Encoder::new();
-        e.feed(b"data").unwrap();
-        e.finish().unwrap();
+        e.feed(b"data").expect("feed failed");
+        e.finish().expect("finish failed");
         assert!(e.sync_flush().is_err());
     }
 
@@ -719,13 +719,13 @@ mod tests {
         let mut max_internal = 0usize;
         // Drive ~10 MiB through the encoder, draining after each feed.
         for _ in 0..160 {
-            e.feed(&chunk).unwrap();
+            e.feed(&chunk).expect("feed failed");
             let out = e.output().to_vec();
             total_consumed += out.len();
             e.advance(out.len());
             max_internal = max_internal.max(e.output.len());
         }
-        e.finish().unwrap();
+        e.finish().expect("finish failed");
         let tail = e.output().to_vec();
         total_consumed += tail.len();
         e.advance(tail.len());

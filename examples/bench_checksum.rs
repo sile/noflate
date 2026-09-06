@@ -29,7 +29,8 @@ fn bench_one(name: &'static str, bytes: usize, repeats: usize) {
     }
     for _ in 0..repeats {
         let (n, _) = time_checksum("adler32 crate", bytes, || {
-            adler32::adler32(&mut input.as_slice().take(input.len() as u64)).unwrap()
+            adler32::adler32(&mut input.as_slice().take(input.len() as u64))
+                .expect("adler32 failed")
         });
         crate_adler_best = crate_adler_best.min(n);
     }

@@ -289,8 +289,16 @@ impl Decoder {
         self.trailer[self.trailer_filled as usize] = byte;
         self.trailer_filled += 1;
         if self.trailer_filled == 8 {
-            let expected_crc = u32::from_le_bytes(self.trailer[0..4].try_into().unwrap());
-            let expected_size = u32::from_le_bytes(self.trailer[4..8].try_into().unwrap());
+            let expected_crc = u32::from_le_bytes(
+                self.trailer[0..4]
+                    .try_into()
+                    .expect("gzip trailer crc is 4 bytes"),
+            );
+            let expected_size = u32::from_le_bytes(
+                self.trailer[4..8]
+                    .try_into()
+                    .expect("gzip trailer size is 4 bytes"),
+            );
             if expected_crc != self.crc.value() {
                 return Err(Error::InvalidData(
                     "crc-32 checksum mismatch in gzip trailer".into(),
@@ -465,16 +473,16 @@ mod tests {
     #[test]
     fn roundtrip_hello() {
         let original = b"Hello, gzip!";
-        let compressed = compress(original).unwrap();
+        let compressed = compress(original).expect("compress failed");
         assert_eq!(&compressed[..3], &[0x1F, 0x8B, 8]);
-        let decompressed = decompress(&compressed).unwrap();
+        let decompressed = decompress(&compressed).expect("decompress failed");
         assert_eq!(decompressed, original);
     }
 
     #[test]
     fn roundtrip_empty() {
-        let compressed = compress(b"").unwrap();
-        assert_eq!(decompress(&compressed).unwrap(), b"");
+        let compressed = compress(b"").expect("compress failed");
+        assert_eq!(decompress(&compressed).expect("decompress failed"), b"");
     }
 
     #[test]
@@ -485,17 +493,21 @@ mod tests {
         // truncating it.
         for len in [1usize, 7, 1024, 65_536, 75_536, 262_144] {
             let input: Vec<u8> = (0..len).map(|i| (i * 13 + 7) as u8).collect();
-            let c = compress(&input).unwrap();
-            assert_eq!(decompress(&c).unwrap(), input, "len={len}");
+            let c = compress(&input).expect("compress failed");
+            assert_eq!(
+                decompress(&c).expect("decompress failed"),
+                input,
+                "len={len}"
+            );
         }
     }
 
     #[test]
     fn incremental_feed_one_byte_at_a_time() {
-        let compressed = compress(b"gzip streaming test").unwrap();
+        let compressed = compress(b"gzip streaming test").expect("compress failed");
         let mut d = Decoder::new();
         for &byte in &compressed {
-            d.feed(&[byte]).unwrap();
+            d.feed(&[byte]).expect("feed failed");
         }
         assert!(d.is_finished());
         let out = d.output().to_vec();
@@ -505,7 +517,7 @@ mod tests {
 
     #[test]
     fn tampered_crc_rejected() {
-        let mut c = compress(b"the quick brown fox").unwrap();
+        let mut c = compress(b"the quick brown fox").expect("compress failed");
         let i = c.len() - 8;
         c[i] ^= 0x01;
         assert!(decompress(&c).is_err());
@@ -513,7 +525,7 @@ mod tests {
 
     #[test]
     fn tampered_size_rejected() {
-        let mut c = compress(b"the quick brown fox").unwrap();
+        let mut c = compress(b"the quick brown fox").expect("compress failed");
         let i = c.len() - 1;
         c[i] ^= 0x01;
         assert!(decompress(&c).is_err());
@@ -521,7 +533,7 @@ mod tests {
 
     #[test]
     fn bad_magic_rejected() {
-        let mut c = compress(b"hello").unwrap();
+        let mut c = compress(b"hello").expect("compress failed");
         c[0] ^= 0x01;
         assert!(decompress(&c).is_err());
     }
@@ -531,29 +543,36 @@ mod tests {
         use std::io::{Read, Write};
 
         // Our output -> flate2's decoder.
-        let ours = compress(b"noflate -> flate2 gzip").unwrap();
+        let ours = compress(b"noflate -> flate2 gzip").expect("compress failed");
         let mut their_dec = flate2::read::GzDecoder::new(&ours[..]);
         let mut decoded = Vec::new();
-        their_dec.read_to_end(&mut decoded).unwrap();
+        their_dec
+            .read_to_end(&mut decoded)
+            .expect("read_to_end failed");
         assert_eq!(decoded, b"noflate -> flate2 gzip");
 
         // flate2's output -> our decoder.
         let mut their_enc =
             flate2::write::GzEncoder::new(Vec::new(), flate2::Compression::default());
-        their_enc.write_all(b"flate2 -> noflate gzip").unwrap();
-        let theirs = their_enc.finish().unwrap();
-        assert_eq!(decompress(&theirs).unwrap(), b"flate2 -> noflate gzip");
+        their_enc
+            .write_all(b"flate2 -> noflate gzip")
+            .expect("write_all failed");
+        let theirs = their_enc.finish().expect("finish failed");
+        assert_eq!(
+            decompress(&theirs).expect("decompress failed"),
+            b"flate2 -> noflate gzip"
+        );
     }
 
     #[test]
     fn decodes_header_with_fname() {
         // Build a gzip with FNAME flag and name "hi\0".
-        let body = compress(b"xyz").unwrap();
+        let body = compress(b"xyz").expect("compress failed");
         let mut patched = Vec::new();
         patched.extend_from_slice(&[MAGIC1, MAGIC2, 8, super::FNAME, 0, 0, 0, 0, 0, 255]);
         patched.extend_from_slice(b"hi\0");
         patched.extend_from_slice(&body[10..]);
-        assert_eq!(decompress(&patched).unwrap(), b"xyz");
+        assert_eq!(decompress(&patched).expect("decompress failed"), b"xyz");
     }
 
     use super::{MAGIC1, MAGIC2};
@@ -567,13 +586,13 @@ mod tests {
         let mut total = 0usize;
         let mut max_internal = 0usize;
         for _ in 0..160 {
-            e.feed(&chunk).unwrap();
+            e.feed(&chunk).expect("feed failed");
             let out = e.output().to_vec();
             total += out.len();
             e.advance(out.len());
             max_internal = max_internal.max(e.output.len());
         }
-        e.finish().unwrap();
+        e.finish().expect("finish failed");
         let tail = e.output().to_vec();
         total += tail.len();
         e.advance(tail.len());

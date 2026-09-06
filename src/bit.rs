@@ -245,16 +245,16 @@ mod tests {
         w.finish();
 
         let mut r = BitReader::new(&out);
-        assert_eq!(r.read_bits(1).unwrap(), 1);
-        assert_eq!(r.read_bits(3).unwrap(), 0b010);
-        assert_eq!(r.read_bits(5).unwrap(), 0b11001);
-        assert_eq!(r.read_bits(7).unwrap(), 0b0110110);
+        assert_eq!(r.read_bits(1).expect("read_bits failed"), 1);
+        assert_eq!(r.read_bits(3).expect("read_bits failed"), 0b010);
+        assert_eq!(r.read_bits(5).expect("read_bits failed"), 0b11001);
+        assert_eq!(r.read_bits(7).expect("read_bits failed"), 0b0110110);
     }
 
     #[test]
     fn reader_eof_errors() {
         let mut r = BitReader::new(&[0x01]);
-        r.read_bits(8).unwrap();
+        r.read_bits(8).expect("read_bits failed");
         assert!(r.read_bits(1).is_err());
     }
 
@@ -263,20 +263,20 @@ mod tests {
         let data = [0xAB, 0xCD, 0xEF];
         let mut r = BitReader::new(&data);
         let snap = r.snapshot();
-        assert_eq!(r.read_bits(4).unwrap(), 0xB);
-        assert_eq!(r.read_bits(4).unwrap(), 0xA);
+        assert_eq!(r.read_bits(4).expect("read_bits failed"), 0xB);
+        assert_eq!(r.read_bits(4).expect("read_bits failed"), 0xA);
         r.restore(snap);
-        assert_eq!(r.read_bits(8).unwrap(), 0xAB);
-        assert_eq!(r.read_bits(8).unwrap(), 0xCD);
+        assert_eq!(r.read_bits(8).expect("read_bits failed"), 0xAB);
+        assert_eq!(r.read_bits(8).expect("read_bits failed"), 0xCD);
     }
 
     #[test]
     fn align_to_byte_discards_fraction() {
         let data = [0x34, 0x12];
         let mut r = BitReader::new(&data);
-        r.read_bits(4).unwrap();
+        r.read_bits(4).expect("read_bits failed");
         r.align_to_byte();
-        assert_eq!(r.read_bytes(1).unwrap(), &[0x12]);
+        assert_eq!(r.read_bytes(1).expect("read_bytes failed"), &[0x12]);
     }
 
     #[test]
@@ -284,14 +284,14 @@ mod tests {
         let data = [0xAA, 0xBB, 0xCC];
         let mut r = BitReader::new(&data);
         assert_eq!(r.committed_bytes(), 0);
-        r.read_bits(4).unwrap();
+        r.read_bits(4).expect("read_bits failed");
         // Byte 0 was loaded into the buffer even though only 4 bits were
         // consumed; the outer caller commits the whole byte and keeps the
         // remaining 4 bits via `residual_bit_buffer`.
         assert_eq!(r.committed_bytes(), 1);
-        r.read_bits(4).unwrap();
+        r.read_bits(4).expect("read_bits failed");
         assert_eq!(r.committed_bytes(), 1);
-        r.read_bits(1).unwrap();
+        r.read_bits(1).expect("read_bits failed");
         assert_eq!(r.committed_bytes(), 2);
     }
 
@@ -300,7 +300,7 @@ mod tests {
         let data = [0x00, 0x00];
         let mut r = BitReader::new(&data);
         assert_eq!(r.available_bits(), 16);
-        r.read_bits(3).unwrap();
+        r.read_bits(3).expect("read_bits failed");
         assert_eq!(r.available_bits(), 13);
     }
 }

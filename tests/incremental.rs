@@ -7,7 +7,7 @@ fn decode_byte_by_byte(compressed: &[u8]) -> Vec<u8> {
     let mut d = Decoder::new();
     let mut collected = Vec::new();
     for &byte in compressed {
-        d.feed(&[byte]).unwrap();
+        d.feed(&[byte]).expect("feed failed");
         let out = d.output().to_vec();
         collected.extend_from_slice(&out);
         d.advance(out.len());
@@ -22,7 +22,7 @@ fn decode_in_chunks(compressed: &[u8], chunk_size: usize) -> Vec<u8> {
     let mut offset = 0;
     while offset < compressed.len() {
         let end = (offset + chunk_size).min(compressed.len());
-        d.feed(&compressed[offset..end]).unwrap();
+        d.feed(&compressed[offset..end]).expect("feed failed");
         let out = d.output().to_vec();
         collected.extend_from_slice(&out);
         d.advance(out.len());
@@ -35,9 +35,9 @@ fn decode_in_chunks(compressed: &[u8], chunk_size: usize) -> Vec<u8> {
 fn encode_byte_by_byte(input: &[u8]) -> Vec<u8> {
     let mut e = Encoder::new();
     for &byte in input {
-        e.feed(&[byte]).unwrap();
+        e.feed(&[byte]).expect("feed failed");
     }
-    e.finish().unwrap();
+    e.finish().expect("finish failed");
     let out = e.output().to_vec();
     e.advance(out.len());
     out
@@ -53,7 +53,7 @@ fn decoder_byte_by_byte_matches_whole() {
         &[0u8; 512],
     ];
     for input in inputs {
-        let compressed = compress(input).unwrap();
+        let compressed = compress(input).expect("compress failed");
         let out = decode_byte_by_byte(&compressed);
         assert_eq!(out, *input, "incremental decode mismatch");
     }
@@ -62,7 +62,7 @@ fn decoder_byte_by_byte_matches_whole() {
 #[test]
 fn decoder_random_chunk_sizes() {
     let input = b"The quick brown fox jumps over the lazy dog.";
-    let compressed = compress(input).unwrap();
+    let compressed = compress(input).expect("compress failed");
     for chunk_size in [1, 2, 3, 5, 7, 11] {
         let out = decode_in_chunks(&compressed, chunk_size);
         assert_eq!(out, input, "chunk_size={chunk_size}");
@@ -74,7 +74,7 @@ fn encoder_byte_by_byte_matches_whole() {
     let inputs: &[&[u8]] = &[b"", b"X", b"Hello World!", b"banana banana"];
     for input in inputs {
         let compressed = encode_byte_by_byte(input);
-        let decoded = decompress(&compressed).unwrap();
+        let decoded = decompress(&compressed).expect("decompress failed");
         assert_eq!(decoded, *input);
     }
 }
@@ -83,11 +83,11 @@ fn encoder_byte_by_byte_matches_whole() {
 fn decoder_advance_mid_stream() {
     // The caller can drain output incrementally rather than all at once.
     let input = b"The quick brown fox jumps over the lazy dog.";
-    let compressed = compress(input).unwrap();
+    let compressed = compress(input).expect("compress failed");
     let mut d = Decoder::new();
     let mut collected = Vec::new();
     for chunk in compressed.chunks(3) {
-        d.feed(chunk).unwrap();
+        d.feed(chunk).expect("feed failed");
         // Drain only half of what's available each time.
         let half = d.output().len() / 2;
         collected.extend_from_slice(&d.output()[..half]);
