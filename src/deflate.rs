@@ -34,12 +34,32 @@ pub fn compress(data: &[u8]) -> Result<Vec<u8>> {
 pub fn decompress(data: &[u8]) -> Result<Vec<u8>> {
     let mut decoder = Decoder::new();
     decoder.feed(data)?;
-    if !decoder.is_finished() {
-        return Err(Error::InvalidData(
-            "deflate stream ended before the final block".into(),
-        ));
+    let mut out = Vec::new();
+    // `feed` may return before the final block is consumed once the decoder
+    // has buffered up to its internal output cap; drain and resume until the
+    // stream is complete. Resume with empty feeds, stopping only when an
+    // empty feed makes no progress — that means the stream is truncated (the
+    // decoder wants more compressed bytes that are not present).
+    loop {
+        let produced = decoder.output().to_vec();
+        out.extend_from_slice(&produced);
+        decoder.advance(produced.len());
+        if decoder.is_finished() {
+            break;
+        }
+        let before_remaining = decoder.remaining_input().len();
+        decoder.feed(&[])?;
+        // A `feed` may produce the final block's output and finish in the
+        // same call. Do not break here; loop back to collect that output
+        // before checking `is_finished`.
+        if decoder.output().is_empty()
+            && decoder.remaining_input().len() == before_remaining
+            && !decoder.is_finished()
+        {
+            return Err(Error::InvalidData(
+                "deflate stream ended before the final block".into(),
+            ));
+        }
     }
-    let out = decoder.output().to_vec();
-    decoder.advance(out.len());
     Ok(out)
 }

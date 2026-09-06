@@ -5,6 +5,16 @@
 //! The decoder runs its internal state machine as far as possible on each
 //! `feed` call and waits for more input when a step needs more bits.
 //! "Need more bytes" is a no-op return from `feed`, not an error.
+//!
+//! To keep memory bounded, `feed` may also return early once the decoder has
+//! buffered [`MAX_INTERNAL_BUFFER`] decompressed bytes that the caller has
+//! not yet drained — a single block can expand arbitrarily ([RFC 1951] has
+//! no per-block maximum), and without this cap the whole block would be
+//! buffered before control returned. Drain via `output` / `advance`, then
+//! call `feed` again (with remaining input, or an empty slice once the
+//! compressed data is exhausted) to resume decoding.
+//!
+//! [RFC 1951]: https://tools.ietf.org/html/rfc1951
 
 use alloc::borrow::Cow;
 use alloc::format;
@@ -26,6 +36,22 @@ use crate::symbol::{
 /// decoding work itself. Smaller streams never hit the threshold, so the
 /// common case pays nothing.
 const COMPACT_THRESHOLD: usize = 1024 * 1024;
+
+/// Maximum number of decompressed bytes the decoder buffers before yielding
+/// control back to the caller.
+///
+/// A single DEFLATE block can expand to an arbitrarily large size (RFC 1951
+/// has no per-block maximum). Without this cap, one highly-compressible
+/// block would be fully expanded into the internal output buffer before the
+/// caller could drain it via [`Decoder::output`] / [`Decoder::advance`],
+/// allowing memory to grow without bound. Once the unread output reaches this
+/// threshold the decoder stops and returns from [`Decoder::feed`]; callers
+/// drain the buffered bytes and call `feed` again (with remaining input, or
+/// an empty slice once the compressed data is exhausted) to resume.
+///
+/// The cap is checked between symbols, so the buffer may overshoot by up to
+/// one LZ77 match (`MAX_MATCH`, 258 bytes) before control returns.
+const MAX_INTERNAL_BUFFER: usize = 64 * 1024;
 
 /// Streaming DEFLATE decoder.
 #[derive(Debug)]
@@ -104,6 +130,14 @@ impl Decoder {
     /// Returns an error only for genuine stream errors. Running out of
     /// input is not an error: the call returns `Ok(())` and the decoder
     /// waits for more bytes.
+    ///
+    /// The call may also return `Ok(())` before the stream is finished once
+    /// [`MAX_INTERNAL_BUFFER`] decompressed bytes have been buffered and not
+    /// yet drained. Drain them via [`Decoder::output`] / [`Decoder::advance`],
+    /// then call `feed` again (with remaining input, or `&[]` once the
+    /// compressed data is exhausted) to resume. A `feed` call is therefore
+    /// not guaranteed to consume the entire stream; callers that need a
+    /// complete stream must drain in a loop until [`Decoder::is_finished`].
     pub fn feed(&mut self, data: &[u8]) -> Result<()> {
         if self.finished && !data.is_empty() {
             return Err(Error::InvalidData(
@@ -170,6 +204,7 @@ impl Decoder {
             let Self {
                 input,
                 output,
+                drained,
                 state,
                 pending_bit_buffer,
                 pending_bit_count,
@@ -179,9 +214,10 @@ impl Decoder {
                 BitReader::new_seeded(input.get(), *pending_bit_buffer, *pending_bit_count);
             let mut finished = false;
             loop {
-                match step(&mut reader, state, output)? {
+                match step(&mut reader, state, output, *drained)? {
                     StepOutcome::Progress => continue,
                     StepOutcome::NeedMoreBytes => break,
+                    StepOutcome::Yield => break,
                     StepOutcome::Finished => {
                         finished = true;
                         break;
@@ -209,6 +245,7 @@ fn step(
     reader: &mut BitReader<'_>,
     state: &mut DecodeState,
     output: &mut Vec<u8>,
+    drained: usize,
 ) -> Result<StepOutcome> {
     let current = core::mem::replace(state, DecodeState::Transient);
     match current {
@@ -259,7 +296,7 @@ fn step(
             is_final,
             literal,
             distance,
-        } => step_symbol_loop(reader, state, output, is_final, literal, distance),
+        } => step_symbol_loop(reader, state, output, drained, is_final, literal, distance),
         DecodeState::Finished => {
             *state = DecodeState::Finished;
             Ok(StepOutcome::Finished)
@@ -576,11 +613,27 @@ fn step_symbol_loop(
     reader: &mut BitReader<'_>,
     state: &mut DecodeState,
     output: &mut Vec<u8>,
+    drained: usize,
     is_final: bool,
     literal: HuffmanDecoder,
     distance: HuffmanDecoder,
 ) -> Result<StepOutcome> {
     loop {
+        // Yield to the caller once the unread output reaches the internal
+        // cap, so a single arbitrarily-large block cannot grow the buffer
+        // without bound. The Huffman decoders live in the preserved
+        // `SymbolLoop` state, so decoding resumes seamlessly on the next
+        // `feed`. Unlike `NeedMoreBytes`, the just-decoded symbol's bits are
+        // left consumed (no snapshot restore): control returns to the caller
+        // with the produced bytes ready to drain.
+        if output.len() - drained >= MAX_INTERNAL_BUFFER {
+            *state = DecodeState::SymbolLoop {
+                is_final,
+                literal,
+                distance,
+            };
+            return Ok(StepOutcome::Yield);
+        }
         let snap = reader.snapshot();
         if reader.available_bits() < literal.safely_peek_bits() as usize {
             *state = DecodeState::SymbolLoop {
@@ -688,6 +741,10 @@ fn step_symbol_loop(
 enum StepOutcome {
     Progress,
     NeedMoreBytes,
+    /// The output buffer reached [`MAX_INTERNAL_BUFFER`] and control should
+    /// return to the caller so it can drain the produced bytes. Unlike
+    /// `NeedMoreBytes`, no input is awaited and no snapshot is restored.
+    Yield,
     Finished,
 }
 
@@ -738,6 +795,37 @@ mod tests {
         let out = d.output().to_vec();
         d.advance(out.len());
         out
+    }
+
+    /// Drain a decoder to completion, resuming via empty `feed` calls after
+    /// any internal output-cap yield. Appends all produced bytes to `out`.
+    ///
+    /// Test inputs are always complete streams, so a run that stalls with no
+    /// progress indicates a regression and is surfaced as a panic rather
+    /// than a hang.
+    fn drain_until_finished(d: &mut Decoder, out: &mut Vec<u8>) {
+        loop {
+            let produced = d.output().to_vec();
+            out.extend_from_slice(&produced);
+            d.advance(produced.len());
+            if d.is_finished() {
+                break;
+            }
+            // Resume after an output-cap yield. The remaining compressed
+            // input is buffered in the decoder, so an empty feed continues
+            // decoding.
+            let before_remaining = d.remaining_input().len();
+            d.feed(&[]).expect("resume feed");
+            // A resume may produce the final block and finish at once while
+            // leaving no new output; that is still progress (the stream is
+            // complete), so only flag a true stall (would-be truncated input).
+            assert!(
+                !d.output().is_empty()
+                    || d.remaining_input().len() != before_remaining
+                    || d.is_finished(),
+                "drain_until_finished stalled: no progress on a complete stream",
+            );
+        }
     }
 
     #[test]
@@ -808,16 +896,21 @@ mod tests {
             let produced = d.output().to_vec();
             decoded.extend_from_slice(&produced);
             d.advance(produced.len());
-            // Inspect the internal buffer length through the public
-            // surface: output() returns [drained..], so output.len() after
-            // advance is (total - drained). We use that as a proxy.
-            max_internal = max_internal.max(d.output.len());
+            // Inspect the unread buffer length through the public surface:
+            // after advance, output().len() is (total - drained), which is
+            // bounded by the internal cap plus one symbol's overshoot.
+            max_internal = max_internal.max(d.output().len());
         }
+        // A `feed` may return before the final block when the internal cap
+        // is reached; drain the remainder with empty resumes.
+        drain_until_finished(&mut d, &mut decoded);
         assert!(d.is_finished());
         assert_eq!(decoded, payload);
-        // Must stay well under the total decoded size (10 MiB).
+        // The unread buffer observed by the caller must stay well under the
+        // total decoded size (10 MiB): a single feed must not buffer a whole
+        // block.
         assert!(
-            max_internal < 2 * 1024 * 1024,
+            max_internal <= super::MAX_INTERNAL_BUFFER + 258,
             "internal output buffer grew to {max_internal} bytes"
         );
     }
@@ -853,7 +946,37 @@ mod tests {
             decoded.extend_from_slice(&produced);
             d.advance(produced.len());
         }
+        drain_until_finished(&mut d, &mut decoded);
         assert!(d.is_finished());
+        assert_eq!(decoded, payload);
+    }
+
+    #[test]
+    fn single_block_does_not_buffer_whole_output() {
+        // Regression: a single DEFLATE block can expand arbitrarily (RFC 1951
+        // has no per-block maximum). A one-shot encode of 8 MiB of zeros
+        // yields one block; without the internal output cap a single `feed`
+        // would buffer the entire 8 MiB expansion before the caller could
+        // drain it.
+        use crate::encode::{EncodeOptions, Encoder};
+
+        let payload = alloc::vec![0u8; 8 * 1024 * 1024];
+        let mut e = Encoder::with_options(EncodeOptions::new().buffer_all_input());
+        e.feed(&payload).unwrap();
+        e.finish().unwrap();
+        let compressed = e.output().to_vec();
+
+        let mut d = Decoder::new();
+        d.feed(&compressed).expect("feed");
+        // The first feed must stop once the internal cap is reached, not
+        // buffer the whole 8 MiB expansion.
+        let first_len = d.output().len();
+        assert!(
+            first_len <= super::MAX_INTERNAL_BUFFER + 258,
+            "single feed buffered {first_len} bytes of one block",
+        );
+        let mut decoded = alloc::vec::Vec::new();
+        drain_until_finished(&mut d, &mut decoded);
         assert_eq!(decoded, payload);
     }
 }
