@@ -893,13 +893,13 @@ mod tests {
         let mut max_internal = 0usize;
         for chunk in compressed.chunks(64 * 1024) {
             d.feed(chunk).unwrap();
+            // Inspect the unread buffer length through the public surface
+            // BEFORE draining: output().len() is (total - drained), which is
+            // bounded by the internal cap plus one symbol's overshoot.
+            max_internal = max_internal.max(d.output().len());
             let produced = d.output().to_vec();
             decoded.extend_from_slice(&produced);
             d.advance(produced.len());
-            // Inspect the unread buffer length through the public surface:
-            // after advance, output().len() is (total - drained), which is
-            // bounded by the internal cap plus one symbol's overshoot.
-            max_internal = max_internal.max(d.output().len());
         }
         // A `feed` may return before the final block when the internal cap
         // is reached; drain the remainder with empty resumes.
